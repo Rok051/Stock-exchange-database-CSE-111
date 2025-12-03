@@ -27,36 +27,92 @@ We used these tools to build it:
 ---
 
 ## Database Design
-We have **8 main tables** and **8 relationships** in our database.
+We built a comprehensive database with over **30 tables** to handle all the stock trading features. The main entities include users, accounts, securities, orders, holdings, transactions, portfolios, and watchlists, along with supporting tables for daily prices, market data, and relationships.
 
-**The Tables:**
-`Users`, `Portfolios`, `Stocks`, `Companies`, `Markets`, `Orders`, `Transactions`, `Watchlist`
+**Core Tables:**
+`User`, `Account`, `Security`, `DailyPrice`, `Order`, `Holding`, `Watchlist`, `WatchlistItem`
 
-**How they connect:**
-- Users can have Portfolios (Many-to-Many)
-- Portfolios have Stocks (Many-to-Many)
-- Users can watch Stocks (Many-to-Many)
-- Companies are on Markets (Many-to-Many)
-- A Company has Stocks (One-to-Many)
-- A User makes Orders (One-to-Many)
-- A Stock is in Orders (Many-to-One)
-- An Order creates Transactions (One-to-Many)
+**Key Relationships:**
+- Users can have multiple Accounts (One-to-Many)
+- Accounts hold Securities through Holdings (Many-to-Many)
+- Users track Securities via Watchlists (Many-to-Many)
+- Orders link Accounts and Securities (Many-to-Many)
+- Daily prices track Security performance over time (One-to-Many)
 
 ---
 
-## Docs and Diagrams
-Here are the diagrams we made for the design:
+## Features
 
-### E/R Diagram
-![E/R Diagram](docs/ER_Diagram.png)
+**User Management:**
+- User registration and authentication
+- Role-based access (regular users vs admins)
+- Secure password hashing
 
-### Use Case Diagrams
-- Investor Use Case: `docs/Investor_UseCase.png`
-- Admin Use Case: `docs/Admin_UseCase.png`
+**Account Management:**
+- Create multiple brokerage accounts per user
+- Track cash balances
+- Manage account status (active, frozen, closed)
 
-### Checkpoint Slides
-- [Project Checkpoint 1 Presentation (PDF)](docs/Project_Checkpoint_1.pdf)
-- [Relation Specification (TXT)](docs/Relation_Specification.txt)
+**Trading:**
+- Browse available securities
+- Place market and limit orders
+- Buy/sell stocks
+- Track order history and status
+
+**Portfolio:**
+- View current holdings across all accounts
+- See total portfolio value
+- Average cost tracking per security
+
+**Watchlists:**
+- Create custom watchlists
+- Add/remove securities to track
+- Monitor multiple stocks at once
+
+**Analytics:**
+- Dashboard with key stats
+- Most traded securities
+- Portfolio performance tracking
+- Account summaries
+
+---
+
+## What We Learned
+
+While building this project, we got hands-on experience with:
+
+- **Database Normalization**: Making sure our tables were properly normalized to avoid redundancy
+- **Complex Relationships**: Implementing many-to-many relationships using junction tables
+- **Foreign Keys**: Using constraints to maintain data integrity
+- **API Design**: Creating RESTful endpoints that make sense
+- **Authentication**: Implementing session-based auth from scratch
+- **Frontend-Backend Integration**: Getting the web UI to talk to our Flask API
+- **SQL Queries**: Writing complex JOIN queries for analytics
+
+---
+
+## Challenges We Faced
+
+**Port Conflicts**: macOS kept blocking port 5000 because of AirPlay, so we had to move the backend to port 5001.
+
+**UUID Format Issues**: SQLite wanted UUIDs without hyphens, but we were generating them with hyphens. Took a while to figure that out.
+
+**Error Handling**: Initially our error messages were super vague ("Failed to create user"). We had to go back and add proper try-catch blocks everywhere.
+
+**CORS Issues**: Getting the frontend to actually talk to the backend was a pain at first. Had to configure Flask-CORS properly.
+
+---
+
+## Future Improvements
+
+If we had more time, we'd add:
+- Real-time stock prices (maybe using an API)
+- Charts and graphs for price history
+- Email notifications for filled orders
+- Mobile app version
+- Transaction history with better filtering
+- Tax reporting features
+- Social features (following other traders)
 
 ---
 
