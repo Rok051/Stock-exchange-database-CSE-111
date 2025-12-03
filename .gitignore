@@ -1,5 +1,5 @@
 *.db
 __pycache__/
-.gemini/
+
 *.pyc
 .DS_Store
