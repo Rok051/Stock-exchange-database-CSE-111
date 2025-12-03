@@ -8,21 +8,18 @@ active_sessions = {}
 
 
 def hash_password(password: str) -> str:
-    """Hash a plaintext password using SHA-256."""
+    # Hash the password with SHA-256
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
 
 def generate_session_token() -> str:
-    """Generate a secure random session token."""
+    # Generate a random session token
     return secrets.token_hex(32)
 
 
 def create_session(user_id: str, email: str, full_name: str, role: str) -> str:
-    """
-    Create a new session for a user and return the token.
-    The token is what the frontend stores and sends as:
-    Authorization: Bearer <token>
-    """
+    # Create a session and return the token
+    # Frontend sends this as: Authorization: Bearer <token>
     token = generate_session_token()
     active_sessions[token] = {
         "user_id": user_id,
@@ -34,18 +31,18 @@ def create_session(user_id: str, email: str, full_name: str, role: str) -> str:
 
 
 def get_session(token: str):
-    """Get session data from token, or None if not found."""
+    # Get the session data, or None if expired
     return active_sessions.get(token)
 
 
 def delete_session(token: str) -> None:
-    """Remove a session (used on logout)."""
+    # Remove the session when user logs out
     if token in active_sessions:
         del active_sessions[token]
 
 
 def _get_token_from_header():
-    """Internal helper: extract bare token from Authorization header."""
+    # Pull the token from the Authorization header
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         return None
@@ -53,11 +50,8 @@ def _get_token_from_header():
 
 
 def require_auth(f):
-    """
-    Decorator to require authentication.
-    - Looks up the session from the Authorization header
-    - Attaches session as request.current_user
-    """
+    # Decorator that makes sure the user is logged in
+    # Loads their session and attaches it to the request
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -69,7 +63,7 @@ def require_auth(f):
         if not session:
             return jsonify({"error": "Invalid or expired session"}), 401
 
-        # Attach session data to the request for downstream handlers
+        # Attach session to the request so other functions can use it
         request.current_user = session
         return f(*args, **kwargs)
 
@@ -77,9 +71,7 @@ def require_auth(f):
 
 
 def require_admin(f):
-    """
-    Decorator to require an authenticated user with ADMIN role.
-    """
+    # Same as require_auth but also checks if user is an admin
 
     @wraps(f)
     def decorated_function(*args, **kwargs):

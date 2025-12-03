@@ -10,10 +10,7 @@ DB_PATH = os.path.abspath(
 
 
 def _ensure_db_exists():
-    """
-    Make sure the database file exists.
-    If it doesn't, raise a clear error instead of a cryptic sqlite3 error.
-    """
+    # Make sure the database file actually exists
     if not os.path.exists(DB_PATH):
         raise FileNotFoundError(
             f"Database file not found at: {DB_PATH}\n"
@@ -23,13 +20,8 @@ def _ensure_db_exists():
 
 @contextmanager
 def get_db_connection():
-    """
-    Context manager for database connections.
-
-    - Opens connection to DB_PATH
-    - Sets row_factory so we can access columns by name
-    - Commits on success, rolls back on error
-    """
+    # Opens a connection to the database
+    # Commits on success, rolls back if there's an error
     _ensure_db_exists()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -44,18 +36,9 @@ def get_db_connection():
 
 
 def execute_query(query, params=None, fetch_one=False):
-    """
-    Execute a SQL query and return results.
-
-    Args:
-        query (str): SQL query string
-        params (tuple or list): Query parameters (optional)
-        fetch_one (bool): If True, return only a single row dict
-
-    Returns:
-        - For SELECT: list[dict] or dict (if fetch_one=True)
-        - For INSERT/UPDATE/DELETE: dict with affected_rows and lastrowid
-    """
+    # Run a SQL query and return the results
+    # For SELECT: returns list of dicts (or single dict if fetch_one=True)
+    # For INSERT/UPDATE/DELETE: returns affected rows + lastrowid
     with get_db_connection() as conn:
         cur = conn.cursor()
 
@@ -81,10 +64,7 @@ def execute_query(query, params=None, fetch_one=False):
 
 
 def generate_uuid():
-    """
-    Generate a UUID in the same format as lower(hex(randomblob(16))) in SQLite:
-    a 32-character hex string without hyphens.
-    """
+    # Generate a UUID the same way SQLite does it (32-char hex, no hyphens)
     import uuid
 
     return uuid.uuid4().hex
