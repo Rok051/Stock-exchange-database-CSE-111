@@ -225,14 +225,6 @@ app.run(debug=True, port=5000)  # Change port here
 
 And update `API_BASE_URL` in `app.js`.
 
-## 📝 License
 
-This project is part of the CSE 111 Stock Exchange Database assignment.
 
-## 🤝 Contributing
 
-This is an educational project. Feel free to extend and customize as needed!
-
----
-
-**Built with ❤️ for CSE 111**
