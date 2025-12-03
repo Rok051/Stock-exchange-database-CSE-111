@@ -7,10 +7,10 @@ PRAGMA foreign_keys = ON;
 ---------------------------------------------------------------
 -- 1) Insert Users
 ---------------------------------------------------------------
-INSERT INTO User (user_id, full_name, email) VALUES
-  (lower(hex(randomblob(16))), 'Rohit Kumar', 'rohit@example.com'),
-  (lower(hex(randomblob(16))), 'Ajay Grewal', 'ajay@example.com'),
-  (lower(hex(randomblob(16))), 'Arshdeep Dhaliwal', 'arsh@example.com');
+INSERT INTO User (user_id, full_name, email, password, role) VALUES
+  (lower(hex(randomblob(16))), 'Rohit Kumar', 'rohit@example.com', 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791', 'USER'),
+  (lower(hex(randomblob(16))), 'Ajay Grewal', 'ajay@example.com', 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791', 'USER'),
+  (lower(hex(randomblob(16))), 'Arshdeep Dhaliwal', 'arsh@example.com', 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791', 'USER');
 
 ---------------------------------------------------------------
 -- 2) Create Accounts for each user

@@ -14,26 +14,35 @@ CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type
 def login():
     """User login endpoint"""
     try:
-        data = request.json
+        data = request.json or {}
         email = data.get('email')
         password = data.get('password')
-        
+
         if not email or not password:
             return jsonify({'error': 'Email and password are required'}), 400
-        
-        # Hash the password
+
+        # Hash the incoming password
         password_hash = hash_password(password)
-        
-        # Find user
-        query = 'SELECT user_id, full_name, email, role FROM User WHERE email = ? AND password = ?'
+
+        # Find user with matching email + hashed password
+        query = '''
+            SELECT user_id, full_name, email, role
+            FROM "User"
+            WHERE email = ? AND password = ?
+        '''
         user = execute_query(query, (email, password_hash), fetch_one=True)
-        
+
         if not user:
             return jsonify({'error': 'Invalid email or password'}), 401
-        
-        # Create session
-        token = create_session(user['user_id'], user['email'], user['full_name'], user['role'])
-        
+
+        # Create session (stored in memory by auth.py)
+        token = create_session(
+            user['user_id'],
+            user['email'],
+            user['full_name'],
+            user['role']
+        )
+
         return jsonify({
             'token': token,
             'user': {
@@ -46,69 +55,150 @@ def login():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/auth/logout', methods=['POST'])
 @require_auth
 def logout():
     """User logout endpoint"""
-    token = request.headers.get('Authorization').replace('Bearer ', '')
+    auth_header = request.headers.get('Authorization', '')
+    token = auth_header.replace('Bearer ', '')
     delete_session(token)
     return jsonify({'message': 'Logged out successfully'}), 200
+
 
 @app.route('/api/auth/me', methods=['GET'])
 @require_auth
 def get_current_user():
-    """Get current authenticated user"""
+    """Get current authenticated user (from session)"""
     return jsonify({'user': request.current_user}), 200
+
 
 # ==================== USERS ====================
 
 @app.route('/api/users', methods=['GET'])
+@require_admin
 def get_users():
-    """Get all users"""
-    users = execute_query('SELECT * FROM User ORDER BY created_at DESC')
+    """Get all users (admin only)"""
+    users = execute_query('SELECT user_id, full_name, email, role, created_at FROM "User" ORDER BY created_at DESC')
     return jsonify(users)
 
+
 @app.route('/api/users/<user_id>', methods=['GET'])
+@require_auth
 def get_user(user_id):
-    """Get a specific user"""
-    user = execute_query('SELECT * FROM User WHERE user_id = ?', (user_id,), fetch_one=True)
+    """Get a specific user (self or admin)"""
+    current = request.current_user
+
+    # Non-admins can only see themselves
+    if current['role'] != 'ADMIN' and current['user_id'] != user_id:
+        return jsonify({'error': 'Forbidden'}), 403
+
+    user = execute_query(
+        'SELECT user_id, full_name, email, role, created_at FROM "User" WHERE user_id = ?',
+        (user_id,),
+        fetch_one=True
+    )
     if user:
         return jsonify(user)
     return jsonify({'error': 'User not found'}), 404
 
+
 @app.route('/api/users', methods=['POST'])
+@require_admin
 def create_user():
-    """Create a new user"""
+    """
+    Create a new user (admin only).
+    Expects: full_name, email, password, optional role ('USER'/'ADMIN')
+    """
     try:
-        data = request.json
+        data = request.json or {}
+        full_name = data.get('full_name')
+        email = data.get('email')
+        password = data.get('password')
+        role = data.get('role', 'USER').upper()
+
+        if not full_name or not email or not password:
+            return jsonify({'error': 'full_name, email, and password are required'}), 400
+
+        if role not in ['USER', 'ADMIN']:
+            return jsonify({'error': 'role must be USER or ADMIN'}), 400
+
         user_id = generate_uuid()
-        query = 'INSERT INTO User (user_id, full_name, email) VALUES (?, ?, ?)'
-        execute_query(query, (user_id, data['full_name'], data['email']))
-        return jsonify({'user_id': user_id, 'message': 'User created successfully'}), 201
+        password_hash = hash_password(password)
+
+        query = '''
+            INSERT INTO "User" (user_id, full_name, email, password, role)
+            VALUES (?, ?, ?, ?, ?)
+        '''
+        execute_query(query, (user_id, full_name, email, password_hash, role))
+
+        return jsonify({
+            'user_id': user_id,
+            'message': 'User created successfully'
+        }), 201
+
     except Exception as e:
         error_msg = str(e)
-        # Check for UNIQUE constraint violation
         if 'UNIQUE constraint failed' in error_msg or 'unique' in error_msg.lower():
             return jsonify({'error': 'A user with this email already exists'}), 400
-        # Check for NOT NULL constraint
         elif 'NOT NULL constraint failed' in error_msg:
             return jsonify({'error': 'Missing required field'}), 400
         else:
             return jsonify({'error': f'Failed to create user: {error_msg}'}), 500
 
+
 @app.route('/api/users/<user_id>', methods=['PUT'])
+@require_auth
 def update_user(user_id):
-    """Update user information"""
-    data = request.json
-    query = 'UPDATE User SET full_name = ?, email = ? WHERE user_id = ?'
-    execute_query(query, (data['full_name'], data['email'], user_id))
-    return jsonify({'message': 'User updated successfully'})
+    """
+    Update user information.
+    - User can update their own full_name/email
+    - Admin can also update role
+    """
+    current = request.current_user
+    data = request.json or {}
+
+    # Non-admins can only update themselves
+    if current['role'] != 'ADMIN' and current['user_id'] != user_id:
+        return jsonify({'error': 'Forbidden'}), 403
+
+    full_name = data.get('full_name')
+    email = data.get('email')
+    role = data.get('role')  # only admin uses this
+
+    # Build dynamic update
+    fields = []
+    params = []
+
+    if full_name:
+        fields.append('full_name = ?')
+        params.append(full_name)
+    if email:
+        fields.append('email = ?')
+        params.append(email)
+    if role and current['role'] == 'ADMIN':
+        role = role.upper()
+        if role not in ['USER', 'ADMIN']:
+            return jsonify({'error': 'role must be USER or ADMIN'}), 400
+        fields.append('role = ?')
+        params.append(role)
+
+    if not fields:
+        return jsonify({'error': 'No fields to update'}), 400
+
+    params.append(user_id)
+    query = f'UPDATE "User" SET {", ".join(fields)} WHERE user_id = ?'
+    execute_query(query, tuple(params))
+
+    return jsonify({'message': 'User updated successfully'}), 200
+
 
 @app.route('/api/users/<user_id>', methods=['DELETE'])
+@require_admin
 def delete_user(user_id):
-    """Delete a user"""
-    execute_query('DELETE FROM User WHERE user_id = ?', (user_id,))
-    return jsonify({'message': 'User deleted successfully'})
+    """Delete a user (admin only)"""
+    execute_query('DELETE FROM "User" WHERE user_id = ?', (user_id,))
+    return jsonify({'message': 'User deleted successfully'}), 200
 
 # ==================== ACCOUNTS ====================
 
@@ -139,6 +229,53 @@ def get_user_accounts(user_id):
     query = 'SELECT * FROM Account WHERE user_id = ? ORDER BY opened_at DESC'
     accounts = execute_query(query, (user_id,))
     return jsonify(accounts)
+
+@app.route('/api/users/<user_id>/holdings', methods=['GET'])
+def get_user_holdings(user_id):
+    """Get all holdings for a specific user across all accounts"""
+    query = '''
+        SELECT h.*, s.ticker, s.name, a.name as account_name,
+               (h.quantity * h.avg_cost) as total_cost
+        FROM Holding h
+        JOIN Security s ON s.security_id = h.security_id
+        JOIN Account a ON a.account_id = h.account_id
+        WHERE a.user_id = ?
+        ORDER BY h.updated_at DESC
+    '''
+    holdings = execute_query(query, (user_id,))
+    return jsonify(holdings)
+
+@app.route('/api/users/<user_id>/orders', methods=['GET'])
+def get_user_orders(user_id):
+    """Get all orders for a specific user"""
+    query = '''
+        SELECT o.*, s.ticker, s.name, a.name as account_name
+        FROM "Order" o
+        JOIN Security s ON s.security_id = o.security_id
+        JOIN Account a ON a.account_id = o.account_id
+        WHERE a.user_id = ?
+        ORDER BY o.placed_at DESC
+    '''
+    orders = execute_query(query, (user_id,))
+    return jsonify(orders)
+
+@app.route('/api/users/<user_id>/portfolio-summary', methods=['GET'])
+def get_user_portfolio_summary(user_id):
+    """Get portfolio summary for a specific user"""
+    query = '''
+        SELECT 
+            COUNT(DISTINCT a.account_id) as total_accounts,
+            SUM(a.cash_balance) as total_cash,
+            COUNT(DISTINCT h.security_id) as unique_holdings,
+            COALESCE(SUM(h.quantity * h.avg_cost), 0) as holdings_value,
+            SUM(a.cash_balance) + COALESCE(SUM(h.quantity * h.avg_cost), 0) as total_value
+        FROM Account a
+        LEFT JOIN Holding h ON h.account_id = a.account_id
+        WHERE a.user_id = ?
+    '''
+    summary = execute_query(query, (user_id,), fetch_one=True)
+    return jsonify(summary)
+
 
 @app.route('/api/accounts', methods=['POST'])
 def create_account():

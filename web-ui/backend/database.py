@@ -2,14 +2,37 @@ import sqlite3
 import os
 from contextlib import contextmanager
 
-# Path to the database file
-DB_PATH = os.path.join(os.path.dirname(__file__), '../../Phase 2/stock_exchange.db')
+# Absolute path to the SQLite database file
+# (Phase 2/stock_exchange.db relative to this backend folder)
+DB_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../Phase 2/stock_exchange.db")
+)
+
+
+def _ensure_db_exists():
+    """
+    Make sure the database file exists.
+    If it doesn't, raise a clear error instead of a cryptic sqlite3 error.
+    """
+    if not os.path.exists(DB_PATH):
+        raise FileNotFoundError(
+            f"Database file not found at: {DB_PATH}\n"
+            "Make sure you created stock_exchange.db using tables.sql + seed scripts."
+        )
+
 
 @contextmanager
 def get_db_connection():
-    """Context manager for database connections"""
+    """
+    Context manager for database connections.
+
+    - Opens connection to DB_PATH
+    - Sets row_factory so we can access columns by name
+    - Commits on success, rolls back on error
+    """
+    _ensure_db_exists()
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row  # Access columns by name
+    conn.row_factory = sqlite3.Row
     try:
         yield conn
         conn.commit()
@@ -19,38 +42,49 @@ def get_db_connection():
     finally:
         conn.close()
 
+
 def execute_query(query, params=None, fetch_one=False):
     """
-    Execute a SQL query and return results
-    
+    Execute a SQL query and return results.
+
     Args:
-        query: SQL query string
-        params: Query parameters (optional)
-        fetch_one: If True, return only first row
-        
+        query (str): SQL query string
+        params (tuple or list): Query parameters (optional)
+        fetch_one (bool): If True, return only a single row dict
+
     Returns:
-        List of dictionaries or single dictionary if fetch_one=True
+        - For SELECT: list[dict] or dict (if fetch_one=True)
+        - For INSERT/UPDATE/DELETE: dict with affected_rows and lastrowid
     """
     with get_db_connection() as conn:
-        cursor = conn.cursor()
-        if params:
-            cursor.execute(query, params)
+        cur = conn.cursor()
+
+        if params is not None:
+            cur.execute(query, params)
         else:
-            cursor.execute(query)
-        
-        if query.strip().upper().startswith('SELECT'):
+            cur.execute(query)
+
+        first_word = query.strip().split()[0].upper()
+
+        if first_word == "SELECT":
             if fetch_one:
-                row = cursor.fetchone()
+                row = cur.fetchone()
                 return dict(row) if row else None
             else:
-                rows = cursor.fetchall()
-                return [dict(row) for row in rows]
+                rows = cur.fetchall()
+                return [dict(r) for r in rows]
         else:
-            # For INSERT/UPDATE/DELETE, return affected rows
-            return {'affected_rows': cursor.rowcount, 'lastrowid': cursor.lastrowid}
+            return {
+                "affected_rows": cur.rowcount,
+                "lastrowid": cur.lastrowid,
+            }
+
 
 def generate_uuid():
-    """Generate a UUID in SQLite format (32-character hex string without hyphens)"""
+    """
+    Generate a UUID in the same format as lower(hex(randomblob(16))) in SQLite:
+    a 32-character hex string without hyphens.
+    """
     import uuid
-    # Generate UUID and remove hyphens to match SQLite's lower(hex(randomblob(16))) format
+
     return uuid.uuid4().hex

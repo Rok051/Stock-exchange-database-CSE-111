@@ -1,31 +1,6 @@
 // ==================== CONFIGURATION ====================
 const API_BASE_URL = 'http://localhost:5001/api';
 
-// ==================== AUTH HELPERS (FRONTEND) ====================
-function getToken() {
-    return localStorage.getItem('token');
-}
-
-function clearToken() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-}
-
-function setCurrentUser(user) {
-    window.currentUser = user; // keep a global for convenience
-    localStorage.setItem('user', JSON.stringify(user));
-}
-
-function getStoredUser() {
-    const raw = localStorage.getItem('user');
-    if (!raw) return null;
-    try {
-        return JSON.parse(raw);
-    } catch {
-        return null;
-    }
-}
-
 // ==================== STATE MANAGEMENT ====================
 let currentPage = 'dashboard';
 let cachedData = {
@@ -39,74 +14,9 @@ let cachedData = {
 
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', () => {
-    initApp();
+    initNavigation();
+    loadDashboard();
 });
-
-async function initApp() {
-    // Check if user has token
-    const token = getToken();
-
-    if (!token) {
-        // No token - redirect to login page
-        window.location.href = '/';
-        return;
-    }
-
-    // Verify session with backend
-    try {
-        const data = await apiFetch('/auth/me');
-        const user = data.user;
-
-        // Store user info globally + in localStorage
-        setCurrentUser(user);
-
-        // Update UI with user info
-        document.getElementById('current-user-name').textContent = user.full_name;
-        document.getElementById('current-user-role').textContent = user.role;
-
-        // Role-based UI setup and data loading
-        if (user.role === 'ADMIN') {
-            // Show admin navigation
-            document.querySelectorAll('.admin-only').forEach(el => {
-                el.style.display = '';
-            });
-            // Initialize navigation and load admin dashboard
-            initNavigation();
-            loadAdminDashboard();
-        } else {
-            // USER role - hide admin features and load user-specific dashboard
-            document.querySelectorAll('.admin-only').forEach(el => {
-                el.style.display = 'none';
-            });
-            initNavigation();
-            loadUserDashboard(user.user_id);
-        }
-
-    } catch (error) {
-        // Auth failed - clear and redirect to login
-        console.error('Session verification failed:', error);
-        clearToken();
-        window.location.href = '/';
-    }
-}
-
-// Logout function
-function logout() {
-    const token = getToken();
-
-    // Call backend logout
-    if (token) {
-        apiFetch('/auth/logout', { method: 'POST' })
-            .catch(err => console.error('Logout error:', err));
-    }
-
-    // Clear local data
-    clearToken();
-
-    // Redirect to login
-    window.location.href = '/';
-}
-
 
 // ==================== NAVIGATION ====================
 function initNavigation() {
@@ -125,57 +35,35 @@ function navigateTo(page) {
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
     });
-    const navItem = document.querySelector(`[data-page="${page}"]`);
-    if (navItem) navItem.classList.add('active');
+    document.querySelector(`[data-page="${page}"]`).classList.add('active');
 
     // Update page visibility
     document.querySelectorAll('.page').forEach(p => {
         p.classList.remove('active');
     });
-    const pageDiv = document.getElementById(`${page}-page`);
-    if (pageDiv) pageDiv.classList.add('active');
+    document.getElementById(`${page}-page`).classList.add('active');
 
     currentPage = page;
 
     // Load page data
-    const user = window.currentUser;
-    const isUser = user && user.role !== 'ADMIN';
-    const userId = user ? user.user_id : null;
-
     switch (page) {
         case 'dashboard':
-            if (isUser) {
-                loadUserDashboard(userId);
-            } else {
-                loadAdminDashboard();
-            }
+            loadDashboard();
             break;
         case 'users':
             loadUsers();
             break;
         case 'accounts':
-            if (isUser) {
-                loadUserAccounts(userId);
-            } else {
-                loadAccounts();
-            }
+            loadAccounts();
             break;
         case 'securities':
             loadSecurities();
             break;
         case 'orders':
-            if (isUser) {
-                loadUserOrders(userId);
-            } else {
-                loadOrders();
-            }
+            loadOrders();
             break;
         case 'holdings':
-            if (isUser) {
-                loadUserHoldings(userId);
-            } else {
-                loadHoldings();
-            }
+            loadHoldings();
             break;
         case 'watchlists':
             loadWatchlists();
@@ -183,19 +71,12 @@ function navigateTo(page) {
         case 'analytics':
             loadAnalytics();
             break;
-        case 'admin':
-            if (!isUser) {
-                loadAdminPanel();
-            }
-            break;
     }
 }
 
 // ==================== API CALLS ====================
 async function apiCall(endpoint, method = 'GET', data = null) {
     try {
-        const token = getToken();
-
         const options = {
             method,
             headers: {
@@ -203,16 +84,13 @@ async function apiCall(endpoint, method = 'GET', data = null) {
             }
         };
 
-        if (token) {
-            options.headers['Authorization'] = `Bearer ${token}`;
-        }
-
-        if (data !== null && data !== undefined) {
+        if (data) {
             options.body = JSON.stringify(data);
         }
 
         const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
 
+        // Try to parse JSON response
         let result;
         try {
             result = await response.json();
@@ -221,6 +99,7 @@ async function apiCall(endpoint, method = 'GET', data = null) {
         }
 
         if (!response.ok) {
+            // Show detailed error from backend if available
             const errorMsg = result.error || result.message || `API request failed with status ${response.status}`;
             throw new Error(errorMsg);
         }
@@ -233,17 +112,8 @@ async function apiCall(endpoint, method = 'GET', data = null) {
     }
 }
 
-// Wrapper so we can call like apiFetch('/auth/me')
-async function apiFetch(endpoint, options = {}) {
-    const method = options.method || 'GET';
-    const data = options.data || null;
-    return apiCall(endpoint, method, data);
-}
-
 // ==================== DASHBOARD ====================
-
-// Admin dashboard - shows all system data
-async function loadAdminDashboard() {
+async function loadDashboard() {
     try {
         const stats = await apiCall('/analytics/overview');
 
@@ -260,94 +130,7 @@ async function loadAdminDashboard() {
         const mostTraded = await apiCall('/analytics/most-traded');
         displayMostTraded(mostTraded);
     } catch (error) {
-        console.error('Error loading admin dashboard:', error);
-    }
-}
-
-// User dashboard - shows only user's data
-async function loadUserDashboard(userId) {
-    console.log('Loading user dashboard for:', userId);
-    try {
-        // Fetch user portfolio summary
-        const summary = await apiFetch(`/users/${userId}/portfolio-summary`);
-        console.log('Portfolio summary:', summary);
-        displayUserStats(summary);
-
-        // Fetch recent holdings and accounts for dashboard widgets
-        const [holdings, accounts] = await Promise.all([
-            apiFetch(`/users/${userId}/holdings`),
-            apiFetch(`/users/${userId}/accounts`)
-        ]);
-        console.log('Holdings:', holdings);
-        console.log('Accounts:', accounts);
-
-        // FIX: pass (accounts, holdings) in correct order
-        displayUserPortfolio(accounts, holdings);
-    } catch (error) {
-        console.error('Error loading user dashboard:', error);
-        showToast('Error loading your portfolio. Please try again.', 'error');
-    }
-}
-
-function displayUserStats(summary) {
-    // Show user-specific stats
-    document.getElementById('stat-users').textContent = summary.total_accounts || 0;
-    document.querySelector('#stat-users').parentElement.querySelector('p').textContent = 'My Accounts';
-
-    document.getElementById('stat-accounts').textContent = `$${formatNumber(summary.total_cash || 0)}`;
-    document.querySelector('#stat-accounts').parentElement.querySelector('p').textContent = 'Cash Balance';
-
-    document.getElementById('stat-securities').textContent = summary.unique_holdings || 0;
-    document.querySelector('#stat-securities').parentElement.querySelector('p').textContent = 'Stocks Owned';
-
-    document.getElementById('stat-orders').textContent = `$${formatNumber(summary.total_value || 0)}`;
-    document.querySelector('#stat-orders').parentElement.querySelector('p').textContent = 'Total Value';
-}
-
-function displayUserPortfolio(accounts, holdings, orders) {
-    // Display user's accounts in the "Recent Orders" section
-    const accountsContainer = document.getElementById('recent-orders');
-    accountsContainer.parentElement.querySelector('h3').textContent = 'My Accounts';
-
-    if (!accounts || accounts.length === 0) {
-        accountsContainer.innerHTML = '<p style="color: var(--text-secondary);">No accounts found</p>';
-    } else {
-        accountsContainer.innerHTML = accounts.map(account => `
-            <div class="recent-item">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong style="color: var(--text-primary);">${escapeHtml(account.name)}</strong>
-                        <div style="font-size: 0.875rem; color: var(--text-secondary); margin-top: 0.25rem;">
-                            ${account.status}
-                        </div>
-                    </div>
-                    <span style="color: var(--accent-success); font-weight: 600;">$${formatNumber(account.cash_balance)}</span>
-                </div>
-            </div>
-        `).join('');
-    }
-
-    // Display user's holdings in the "Most Traded" section
-    const holdingsContainer = document.getElementById('most-traded');
-    holdingsContainer.parentElement.querySelector('h3').textContent = 'My Holdings';
-
-    if (!holdings || holdings.length === 0) {
-        holdingsContainer.innerHTML = '<p style="color: var(--text-secondary);">No holdings found</p>';
-    } else {
-        holdingsContainer.innerHTML = holdings.slice(0, 5).map(holding => `
-            <div class="recent-item">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <strong style="color: var(--accent-primary);">${escapeHtml(holding.ticker)}</strong>
-                        <div style="font-size: 0.875rem; color: var(--text-secondary);">${escapeHtml(holding.name)}</div>
-                    </div>
-                    <div style="text-align: right;">
-                        <div style="color: var(--text-primary); font-weight: 600;">${holding.quantity} shares</div>
-                        <div style="font-size: 0.875rem; color: var(--text-secondary);">$${formatNumber(holding.total_cost)}</div>
-                    </div>
-                </div>
-            </div>
-        `).join('');
+        console.error('Error loading dashboard:', error);
     }
 }
 
@@ -447,14 +230,9 @@ async function showCreateUserModal() {
 async function createUser(event) {
     event.preventDefault();
     const formData = new FormData(event.target);
-
-    // Backend now expects: full_name, email, password, role
-    // Your modal only has full_name + email, so we default password + role
     const data = {
         full_name: formData.get('full_name'),
-        email: formData.get('email'),
-        password: formData.get('password') || 'demo123',
-        role: (formData.get('role') || 'USER').toUpperCase()
+        email: formData.get('email')
     };
 
     try {
@@ -490,33 +268,12 @@ async function loadAccounts() {
     }
 }
 
-async function loadUserAccounts(userId) {
-    try {
-        const accounts = await apiCall(`/users/${userId}/accounts`);
-        cachedData.accounts = accounts;
-        displayAccounts(accounts);
-        // Hide "Owner" column for user view since it's redundant
-        const table = document.querySelector('#accounts-table table');
-        if (table) {
-            // Hide header
-            table.querySelector('th:nth-child(2)').style.display = 'none';
-            // Hide cells
-            table.querySelectorAll('td:nth-child(2)').forEach(td => td.style.display = 'none');
-        }
-    } catch (error) {
-        console.error('Error loading user accounts:', error);
-    }
-}
-
 function displayAccounts(accounts) {
     const container = document.getElementById('accounts-table');
     if (!accounts || accounts.length === 0) {
         container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No accounts found</p>';
         return;
     }
-
-    // Check if we are in admin mode
-    const isAdmin = window.currentUser && window.currentUser.role === 'ADMIN';
 
     container.innerHTML = `
         <table class="data-table">
@@ -534,7 +291,7 @@ function displayAccounts(accounts) {
                 ${accounts.map(account => `
                     <tr>
                         <td style="color: var(--text-primary); font-weight: 600;">${escapeHtml(account.name)}</td>
-                        <td>${escapeHtml(account.full_name || 'Me')}</td>
+                        <td>${escapeHtml(account.full_name)}</td>
                         <td style="color: var(--accent-success); font-weight: 600;">$${formatNumber(account.cash_balance)}</td>
                         <td><span class="badge badge-${account.status.toLowerCase()}">${account.status}</span></td>
                         <td>${formatDate(account.opened_at)}</td>
@@ -546,50 +303,22 @@ function displayAccounts(accounts) {
             </tbody>
         </table>
     `;
-
-    // If not admin, hide the Owner column
-    if (!isAdmin) {
-        const table = container.querySelector('table');
-        if (table) {
-            table.querySelector('th:nth-child(2)').style.display = 'none';
-            table.querySelectorAll('td:nth-child(2)').forEach(td => td.style.display = 'none');
-        }
-    }
 }
 
 async function showCreateAccountModal() {
-    const user = window.currentUser;
+    const users = await apiCall('/users');
     const select = document.getElementById('account-user-select');
-
-    if (user.role === 'ADMIN') {
-        const users = await apiCall('/users');
-        select.innerHTML = users.map(u =>
-            `<option value="${u.user_id}">${escapeHtml(u.full_name)} (${escapeHtml(u.email)})</option>`
-        ).join('');
-        select.disabled = false;
-        select.parentElement.style.display = 'block';
-    } else {
-        // For regular users, pre-select themselves and hide the dropdown
-        select.innerHTML = `<option value="${user.user_id}" selected>${user.full_name}</option>`;
-        select.disabled = true;
-        select.parentElement.style.display = 'none';
-    }
-
+    select.innerHTML = users.map(user =>
+        `<option value="${user.user_id}">${escapeHtml(user.full_name)} (${escapeHtml(user.email)})</option>`
+    ).join('');
     showModal('create-account-modal');
 }
 
 async function createAccount(event) {
     event.preventDefault();
     const formData = new FormData(event.target);
-
-    // If user select was disabled (for regular users), we need to manually get the user_id
-    let userId = formData.get('user_id');
-    if (!userId) {
-        userId = document.getElementById('account-user-select').value;
-    }
-
     const data = {
-        user_id: userId,
+        user_id: formData.get('user_id'),
         name: formData.get('name'),
         cash_balance: parseFloat(formData.get('cash_balance'))
     };
@@ -598,13 +327,7 @@ async function createAccount(event) {
         await apiCall('/accounts', 'POST', data);
         showToast('Account created successfully!', 'success');
         closeModal();
-
-        // Reload correct list
-        if (window.currentUser.role === 'ADMIN') {
-            loadAccounts();
-        } else {
-            loadUserAccounts(window.currentUser.user_id);
-        }
+        loadAccounts();
     } catch (error) {
         showToast('Failed to create account', 'error');
     }
@@ -621,13 +344,7 @@ async function updateBalance(accountId, amount) {
     try {
         await apiCall(`/accounts/${accountId}/balance`, 'PUT', { amount });
         showToast('Balance updated successfully!', 'success');
-
-        // Reload correct list
-        if (window.currentUser.role === 'ADMIN') {
-            loadAccounts();
-        } else {
-            loadUserAccounts(window.currentUser.user_id);
-        }
+        loadAccounts();
     } catch (error) {
         showToast('Failed to update balance', 'error');
     }
@@ -727,23 +444,6 @@ async function loadOrders() {
     }
 }
 
-async function loadUserOrders(userId) {
-    const status = document.getElementById('order-status-filter')?.value || '';
-    try {
-        const orders = await apiCall(`/users/${userId}/orders`);
-
-        let filteredOrders = orders;
-        if (status) {
-            filteredOrders = orders.filter(o => o.status === status);
-        }
-
-        cachedData.orders = filteredOrders;
-        displayOrders(filteredOrders);
-    } catch (error) {
-        console.error('Error loading user orders:', error);
-    }
-}
-
 function displayOrders(orders) {
     const container = document.getElementById('orders-table');
     if (!orders || orders.length === 0) {
@@ -793,19 +493,13 @@ function displayOrders(orders) {
 }
 
 async function showCreateOrderModal() {
-    const user = window.currentUser;
-    let accounts = [];
-
-    if (user.role === 'ADMIN') {
-        accounts = await apiCall('/accounts');
-    } else {
-        accounts = await apiCall(`/users/${user.user_id}/accounts`);
-    }
-
-    const securities = await apiCall('/securities');
+    const [accounts, securities] = await Promise.all([
+        apiCall('/accounts'),
+        apiCall('/securities')
+    ]);
 
     document.getElementById('order-account-select').innerHTML = accounts.map(account =>
-        `<option value="${account.account_id}">${escapeHtml(account.name)} ($${formatNumber(account.cash_balance)})</option>`
+        `<option value="${account.account_id}">${escapeHtml(account.name)} (${escapeHtml(account.full_name)})</option>`
     ).join('');
 
     document.getElementById('order-security-select').innerHTML = securities.map(security =>
@@ -837,13 +531,7 @@ async function createOrder(event) {
         await apiCall('/orders', 'POST', data);
         showToast('Order placed successfully!', 'success');
         closeModal();
-
-        // Reload correct list
-        if (window.currentUser.role === 'ADMIN') {
-            loadOrders();
-        } else {
-            loadUserOrders(window.currentUser.user_id);
-        }
+        loadOrders();
     } catch (error) {
         showToast('Failed to place order', 'error');
     }
@@ -853,13 +541,7 @@ async function updateOrderStatus(orderId, status) {
     try {
         await apiCall(`/orders/${orderId}/status`, 'PUT', { status });
         showToast(`Order ${status.toLowerCase()} successfully!`, 'success');
-
-        // Reload correct list
-        if (window.currentUser.role === 'ADMIN') {
-            loadOrders();
-        } else {
-            loadUserOrders(window.currentUser.user_id);
-        }
+        loadOrders();
     } catch (error) {
         showToast('Failed to update order status', 'error');
     }
@@ -873,16 +555,6 @@ async function loadHoldings() {
         displayHoldings(holdings);
     } catch (error) {
         console.error('Error loading holdings:', error);
-    }
-}
-
-async function loadUserHoldings(userId) {
-    try {
-        const holdings = await apiCall(`/users/${userId}/holdings`);
-        cachedData.holdings = holdings;
-        displayHoldings(holdings);
-    } catch (error) {
-        console.error('Error loading user holdings:', error);
     }
 }
 
@@ -924,19 +596,13 @@ function displayHoldings(holdings) {
 }
 
 async function showCreateHoldingModal() {
-    const user = window.currentUser;
-    let accounts = [];
-
-    if (user.role === 'ADMIN') {
-        accounts = await apiCall('/accounts');
-    } else {
-        accounts = await apiCall(`/users/${user.user_id}/accounts`);
-    }
-
-    const securities = await apiCall('/securities');
+    const [accounts, securities] = await Promise.all([
+        apiCall('/accounts'),
+        apiCall('/securities')
+    ]);
 
     document.getElementById('holding-account-select').innerHTML = accounts.map(account =>
-        `<option value="${account.account_id}">${escapeHtml(account.name)} (${escapeHtml(account.full_name || 'Me')})</option>`
+        `<option value="${account.account_id}">${escapeHtml(account.name)} (${escapeHtml(account.full_name)})</option>`
     ).join('');
 
     document.getElementById('holding-security-select').innerHTML = securities.map(security =>
@@ -960,13 +626,7 @@ async function createHolding(event) {
         await apiCall('/holdings', 'POST', data);
         showToast('Holding added successfully!', 'success');
         closeModal();
-
-        // Reload correct list
-        if (window.currentUser.role === 'ADMIN') {
-            loadHoldings();
-        } else {
-            loadUserHoldings(window.currentUser.user_id);
-        }
+        loadHoldings();
     } catch (error) {
         showToast('Failed to add holding', 'error');
     }

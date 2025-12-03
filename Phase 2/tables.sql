@@ -20,6 +20,8 @@ CREATE TABLE "User" (
   user_id    TEXT PRIMARY KEY,          -- provide UUID manually or in seed script
   full_name  TEXT NOT NULL,
   email      TEXT NOT NULL UNIQUE,
+  password   TEXT NOT NULL,             -- hashed password (SHA256 in auth.py)
+  role       TEXT NOT NULL DEFAULT 'USER', -- USER or ADMIN
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

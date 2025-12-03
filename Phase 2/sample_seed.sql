@@ -1,22 +1,5 @@
 -- sample_seed.sql
 -- Inserts sample data into the Stock Exchange DB
-
-PRAGMA foreign_keys = ON;
-
----------------------------------------------------
--- Insert Users
----------------------------------------------------
-INSERT INTO User (user_id, full_name, email)
-VALUES
-  (lower(hex(randomblob(16))), 'Rohit Kumar', 'rohit@example.com'),
-  (lower(hex(randomblob(16))), 'Ajay Grewal', 'ajay@example.com'),
-  (lower(hex(randomblob(16))), 'Arshdeep Dhaliwal', 'arsh@example.com');
-
----------------------------------------------------
--- Insert Accounts for each user
----------------------------------------------------
-INSERT INTO Account (account_id, user_id, name, cash_balance)
-SELECT lower(hex(randomblob(16))), user_id, full_name || ' Brokerage', 5000.00
 FROM User;
 
 ---------------------------------------------------
