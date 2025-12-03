@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Exchange Management System</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="logo">
+                <div class="logo-icon">📈</div>
+                <h1>StockEx</h1>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-page="dashboard">
+                    <span class="nav-icon">📊</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-item" data-page="users">
+                    <span class="nav-icon">👥</span>
+                    <span>Users</span>
+                </a>
+                <a href="#" class="nav-item" data-page="accounts">
+                    <span class="nav-icon">💼</span>
+                    <span>Accounts</span>
+                </a>
+                <a href="#" class="nav-item" data-page="securities">
+                    <span class="nav-icon">💹</span>
+                    <span>Securities</span>
+                </a>
+                <a href="#" class="nav-item" data-page="orders">
+                    <span class="nav-icon">📝</span>
+                    <span>Orders</span>
+                </a>
+                <a href="#" class="nav-item" data-page="holdings">
+                    <span class="nav-icon">💎</span>
+                    <span>Holdings</span>
+                </a>
+                <a href="#" class="nav-item" data-page="watchlists">
+                    <span class="nav-icon">⭐</span>
+                    <span>Watchlists</span>
+                </a>
+                <a href="#" class="nav-item" data-page="analytics">
+                    <span class="nav-icon">📈</span>
+                    <span>Analytics</span>
+                </a>
+                <a href="#" class="nav-item admin-only" data-page="admin" style="display: none;">
+                    <span class="nav-icon">🛡️</span>
+                    <span>Admin Panel</span>
+                </a>
+            </nav>
+
+            <div class="user-section">
+                <div class="user-info">
+                    <div class="user-avatar">👤</div>
+                    <div class="user-details">
+                        <div class="user-name" id="current-user-name">Loading...</div>
+                        <div class="user-role" id="current-user-role"></div>
+                    </div>
+                </div>
+                <button class="btn btn-secondary btn-logout" onclick="logout()">Logout 🚪</button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page active">
+                <div class="page-header">
+                    <h2>Dashboard Overview</h2>
+                    <p class="page-subtitle">Real-time statistics and insights</p>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-info">
+                            <h3 id="stat-users">0</h3>
+                            <p>Total Users</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">💼</div>
+                        <div class="stat-info">
+                            <h3 id="stat-accounts">0</h3>
+                            <p>Active Accounts</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">💹</div>
+                        <div class="stat-info">
+                            <h3 id="stat-securities">0</h3>
+                            <p>Securities</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📝</div>
+                        <div class="stat-info">
+                            <h3 id="stat-orders">0</h3>
+                            <p>Total Orders</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h3>Recent Orders</h3>
+                        <div id="recent-orders" class="recent-list"></div>
+                    </div>
+                    <div class="card">
+                        <h3>Most Traded Securities</h3>
+                        <div id="most-traded" class="recent-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Page -->
+            <div id="users-page" class="page">
+                <div class="page-header">
+                    <div>
+                        <h2>Users</h2>
+                        <p class="page-subtitle">Manage system users</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="showCreateUserModal()">
+                        + Add User
+                    </button>
+                </div>
+                <div class="card">
+                    <div id="users-table"></div>
+                </div>
+            </div>
+
+            <!-- Accounts Page -->
+            <div id="accounts-page" class="page">
+                <div class="page-header">
+                    <div>
+                        <h2>Accounts</h2>
+                        <p class="page-subtitle">Manage brokerage accounts</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="showCreateAccountModal()">
+                        + Add Account
+                    </button>
+                </div>
+                <div class="card">
+                    <div id="accounts-table"></div>
+                </div>
+            </div>
+
+            <!-- Securities Page -->
+            <div id="securities-page" class="page">
+                <div class="page-header">
+                    <div>
+                        <h2>Securities</h2>
+                        <p class="page-subtitle">Browse and manage securities</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="showCreateSecurityModal()">
+                        + Add Security
+                    </button>
+                </div>
+                <div class="search-bar">
+                    <input type="text" id="security-search" placeholder="Search by ticker or name..."
+                        onkeyup="searchSecurities()">
+                </div>
+                <div class="card">
+                    <div id="securities-table"></div>
+                </div>
+            </div>
+
+            <!-- Orders Page -->
+            <div id="orders-page" class="page">
+                <div class="page-header">
+                    <div>
+                        <h2>Orders</h2>
+                        <p class="page-subtitle">View and manage trading orders</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="showCreateOrderModal()">
+                        + Place Order
+                    </button>
+                </div>
+                <div class="filter-bar">
+                    <select id="order-status-filter" onchange="loadOrders()">
+                        <option value="">All Orders</option>
+                        <option value="OPEN">Open</option>
+                        <option value="FILLED">Filled</option>
+                        <option value="CANCELED">Canceled</option>
+                    </select>
+                </div>
+                <div class="card">
+                    <div id="orders-table"></div>
+                </div>
+            </div>
+
+            <!-- Holdings Page -->
+            <div id="holdings-page" class="page">
+                <div class="page-header">
+                    <div>
+                        <h2>Holdings</h2>
+                        <p class="page-subtitle">Portfolio positions</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="showCreateHoldingModal()">
+                        + Add Holding
+                    </button>
+                </div>
+                <div class="card">
+                    <div id="holdings-table"></div>
+                </div>
+            </div>
+
+            <!-- Watchlists Page -->
+            <div id="watchlists-page" class="page">
+                <div class="page-header">
+                    <div>
+                        <h2>Watchlists</h2>
+                        <p class="page-subtitle">Track favorite securities</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="showCreateWatchlistModal()">
+                        + Create Watchlist
+                    </button>
+                </div>
+                <div id="watchlists-container"></div>
+            </div>
+
+            <!-- Analytics Page -->
+            <div id="analytics-page" class="page">
+                <div class="page-header">
+                    <h2>Analytics</h2>
+                    <p class="page-subtitle">Advanced insights and statistics</p>
+                </div>
+
+                <div class="analytics-grid">
+                    <div class="card">
+                        <h3>Top Holdings by Value</h3>
+                        <div id="top-holdings" class="analytics-list"></div>
+                    </div>
+                    <div class="card">
+                        <h3>Portfolio Values</h3>
+                        <div id="portfolio-values" class="analytics-list"></div>
+                    </div>
+                    <div class="card">
+                        <h3>Accounts Without Holdings</h3>
+                        <div id="empty-accounts" class="analytics-list"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Admin Panel Page -->
+            <div id="admin-page" class="page">
+                <div class="page-header">
+                    <h2>🛡️ Admin Panel</h2>
+                    <p class="page-subtitle">System management and user administration</p>
+                </div>
+
+                <div class="analytics-grid" style="grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">
+                    <div class="stat-card">
+                        <div class="stat-icon">👥</div>
+                        <div class="stat-info">
+                            <h3 id="admin-stat-users">0</h3>
+                            <p>Regular Users</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">🛡️</div>
+                        <div class="stat-info">
+                            <h3 id="admin-stat-admins">0</h3>
+                            <p>Administrators</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">💰</div>
+                        <div class="stat-info">
+                            <h3 id="admin-stat-cash">$0.00</h3>
+                            <p>Total Cash in System</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon">📊</div>
+                        <div class="stat-info">
+                            <h3 id="admin-stat-active-accounts">0</h3>
+                            <p>Active Accounts</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="card">
+                        <h3>User Management</h3>
+                        <div id="admin-users-table"></div>
+                    </div>
+                    <div class="card">
+                        <h3>Recent Activity</h3>
+                        <div id="admin-recent-activity"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="modal-overlay" class="modal-overlay" onclick="closeModal()"></div>
+
+    <!-- Create User Modal -->
+    <div id="create-user-modal" class="modal">
+        <div class="modal-header">
+            <h3>Create New User</h3>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <form onsubmit="createUser(event)">
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" name="full_name" required>
+            </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="email" required>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create User</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Create Account Modal -->
+    <div id="create-account-modal" class="modal">
+        <div class="modal-header">
+            <h3>Create New Account</h3>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <form onsubmit="createAccount(event)">
+            <div class="form-group">
+                <label>User</label>
+                <select name="user_id" id="account-user-select" required></select>
+            </div>
+            <div class="form-group">
+                <label>Account Name</label>
+                <input type="text" name="name" required>
+            </div>
+            <div class="form-group">
+                <label>Initial Cash Balance</label>
+                <input type="number" name="cash_balance" step="0.01" value="0.00" required>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Account</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Create Security Modal -->
+    <div id="create-security-modal" class="modal">
+        <div class="modal-header">
+            <h3>Add New Security</h3>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <form onsubmit="createSecurity(event)">
+            <div class="form-group">
+                <label>Ticker Symbol</label>
+                <input type="text" name="ticker" required maxlength="10" style="text-transform: uppercase">
+            </div>
+            <div class="form-group">
+                <label>Company Name</label>
+                <input type="text" name="name" required>
+            </div>
+            <div class="form-group">
+                <label>Sector</label>
+                <input type="text" name="sector">
+            </div>
+            <div class="form-group">
+                <label>Exchange</label>
+                <select name="exchange">
+                    <option value="NYSE">NYSE</option>
+                    <option value="NASDAQ">NASDAQ</option>
+                    <option value="AMEX">AMEX</option>
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Security</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Create Order Modal -->
+    <div id="create-order-modal" class="modal">
+        <div class="modal-header">
+            <h3>Place Order</h3>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <form onsubmit="createOrder(event)">
+            <div class="form-group">
+                <label>Account</label>
+                <select name="account_id" id="order-account-select" required></select>
+            </div>
+            <div class="form-group">
+                <label>Security</label>
+                <select name="security_id" id="order-security-select" required></select>
+            </div>
+            <div class="form-group">
+                <label>Side</label>
+                <select name="side" required>
+                    <option value="BUY">Buy</option>
+                    <option value="SELL">Sell</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Order Type</label>
+                <select name="type" id="order-type" onchange="toggleLimitPrice()" required>
+                    <option value="MARKET">Market</option>
+                    <option value="LIMIT">Limit</option>
+                </select>
+            </div>
+            <div class="form-group" id="limit-price-group" style="display: none;">
+                <label>Limit Price</label>
+                <input type="number" name="limit_price" step="0.01">
+            </div>
+            <div class="form-group">
+                <label>Quantity</label>
+                <input type="number" name="quantity" required min="1">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Place Order</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Create Holding Modal -->
+    <div id="create-holding-modal" class="modal">
+        <div class="modal-header">
+            <h3>Add Holding</h3>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <form onsubmit="createHolding(event)">
+            <div class="form-group">
+                <label>Account</label>
+                <select name="account_id" id="holding-account-select" required></select>
+            </div>
+            <div class="form-group">
+                <label>Security</label>
+                <select name="security_id" id="holding-security-select" required></select>
+            </div>
+            <div class="form-group">
+                <label>Quantity</label>
+                <input type="number" name="quantity" required min="0">
+            </div>
+            <div class="form-group">
+                <label>Average Cost</label>
+                <input type="number" name="avg_cost" step="0.01" required min="0">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Holding</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Create Watchlist Modal -->
+    <div id="create-watchlist-modal" class="modal">
+        <div class="modal-header">
+            <h3>Create Watchlist</h3>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <form onsubmit="createWatchlist(event)">
+            <div class="form-group">
+                <label>User</label>
+                <select name="user_id" id="watchlist-user-select" required></select>
+            </div>
+            <div class="form-group">
+                <label>Watchlist Name</label>
+                <input type="text" name="name" required>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Watchlist</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script src="auth.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
+```
