@@ -1,229 +1,98 @@
-# Stock Exchange Management System - Web UI
+# Stock Exchange Web UI
 
-A modern, full-featured web interface for managing your stock exchange database with a sleek dark mode design and comprehensive CRUD operations.
+This is the web interface we built for the database project. It uses a dark mode design and lets you actually use the database to trade stocks.
 
-![Dashboard](https://img.shields.io/badge/Status-Ready-success)
-![Tech Stack](https://img.shields.io/badge/Stack-Flask%20%2B%20Vanilla%20JS-blue)
+## What it does
 
-## 🚀 Features
+- **Dashboard**: Shows you stats about the market.
+- **Users**: You can add and delete users.
+- **Accounts**: Manage brokerage accounts and money.
+- **Securities**: Search for stocks and add new ones.
+- **Orders**: Buy and sell stocks (Market & Limit orders).
+- **Holdings**: See what stocks you own.
+- **Watchlists**: Keep track of stocks you like.
+- **Analytics**: See who owns what and how portfolios are doing.
 
-- **Dashboard**: Real-time statistics and insights
-- **Users Management**: Create, view, and manage users
-- **Accounts**: Brokerage account management with balance updates
-- **Securities**: Browse, search, and add securities
-- **Orders**: Place and manage buy/sell orders (Market & Limit)
-- **Holdings**: Portfolio positions tracking
-- **Watchlists**: Create and manage security watchlists
-- **Analytics**: Advanced insights and portfolio analytics
+## How it looks
 
-## 🎨 Design
+We tried to make it look modern with a dark theme and some glass effects so it's not just a boring database table view. It should work on mobile too.
 
-- Modern dark mode interface with glassmorphism effects
-- Vibrant gradient accents and smooth animations
-- Responsive layout that works on all screen sizes
-- Interactive data tables with hover effects
-- Modal dialogs for creating/editing records
+## Prerequisites
 
-## 📋 Prerequisites
+You need Python 3.7+ and a browser.
+Also make sure the database file is at `Phase 2/stock_exchange.db`.
 
-- Python 3.7+
-- Modern web browser (Chrome, Firefox, Safari, Edge)
-- Your existing SQLite database at `Phase 2/stock_exchange.db`
+## How to Install
 
-## 🛠️ Installation
-
-### 1. Install Python Dependencies
+### 1. Get the Python stuff
+Go to the backend folder and install the requirements:
 
 ```bash
 cd web-ui/backend
 pip install -r requirements.txt
 ```
 
-Or install manually:
-```bash
-pip install Flask Flask-CORS
-```
+### 2. Check the Database
+Just make sure `Phase 2/stock_exchange.db` is there. The backend looks for it there.
 
-### 2. Verify Database Path
+## How to Run It
 
-Make sure your database file exists at:
-```
-Phase 2/stock_exchange.db
-```
-
-The backend is configured to connect to this path relative to the backend directory.
-
-## 🚀 Running the Application
-
-### Start the Backend Server
+### Start the Backend
+Open a terminal and run:
 
 ```bash
 cd web-ui/backend
 python app.py
 ```
+It runs on port 5000.
 
-The API server will start on `http://localhost:5000`
+### Start the Frontend
+You can just open `index.html` in Chrome, or run a simple server:
 
-### Open the Frontend
-
-Simply open the HTML file in your browser:
-
-**Option 1: Direct File**
-```bash
-cd web-ui/frontend
-open index.html
-```
-
-**Option 2: Local Server (Recommended)**
 ```bash
 cd web-ui/frontend
 python -m http.server 8000
 ```
-Then visit: `http://localhost:8000`
+Then go to `http://localhost:8000`.
 
-## 📖 Usage Guide
+## How to use it
 
-### Dashboard
-View overview statistics including total users, accounts, securities, and orders. See recent activity and most traded securities.
+- **Dashboard**: Check the stats.
+- **Users**: Add a user to start.
+- **Accounts**: Give that user an account and some money.
+- **Securities**: Find a stock (like AAPL).
+- **Orders**: Buy some shares.
+- **Holdings**: Check your portfolio.
 
-### Users
-- Click "Add User" to create new users
-- View all users in a data table
-- Delete users with the action buttons
+## Tech Stack
 
-### Accounts
-- Create new brokerage accounts linked to users
-- View account balances and status
-- Use "Deposit" button to add funds to accounts
+**Backend:** Python (Flask) + SQLite
+**Frontend:** Just HTML, CSS, and JS (no React/Angular needed for this part)
 
-### Securities
-- Browse all available securities
-- Use the search bar to filter by ticker or name
-- Add new securities with ticker, name, sector, and exchange
-
-### Orders
-- Place buy/sell orders (Market or Limit)
-- Filter orders by status (Open, Filled, Canceled)
-- Update order status with action buttons
-
-### Holdings
-- View all portfolio positions
-- See quantity, average cost, and total value
-- Add new holdings manually
-
-### Watchlists
-- Create watchlists for different users
-- View watchlist details and securities
-- Delete watchlists as needed
-
-### Analytics
-- View top holdings by value
-- See portfolio values across accounts
-- Identify accounts without holdings
-
-## 🔧 API Endpoints
-
-The backend provides comprehensive REST API endpoints:
-
-### Users
-- `GET /api/users` - List all users
-- `POST /api/users` - Create user
-- `DELETE /api/users/:id` - Delete user
-
-### Accounts
-- `GET /api/accounts` - List all accounts
-- `POST /api/accounts` - Create account
-- `PUT /api/accounts/:id/balance` - Update balance
-
-### Securities
-- `GET /api/securities` - List all securities
-- `POST /api/securities` - Add security
-- `GET /api/securities/search?q=` - Search securities
-
-### Orders
-- `GET /api/orders` - List all orders
-- `POST /api/orders` - Create order
-- `PUT /api/orders/:id/status` - Update order status
-
-### Holdings
-- `GET /api/holdings` - List all holdings
-- `POST /api/holdings` - Add/update holding
-
-### Watchlists
-- `GET /api/watchlists` - List all watchlists
-- `POST /api/watchlists` - Create watchlist
-- `POST /api/watchlists/:id/items` - Add item to watchlist
-- `DELETE /api/watchlists/:id` - Delete watchlist
-
-### Analytics
-- `GET /api/analytics/overview` - Dashboard statistics
-- `GET /api/analytics/most-traded` - Most traded securities
-- `GET /api/analytics/top-holdings` - Top holdings by value
-- `GET /api/analytics/portfolio-value` - Portfolio values
-
-## 🎯 Tech Stack
-
-**Backend:**
-- Flask - Python web framework
-- SQLite - Database
-- Flask-CORS - Cross-origin resource sharing
-
-**Frontend:**
-- Vanilla JavaScript - No frameworks needed
-- Modern CSS3 - Glassmorphism, gradients, animations
-- HTML5 - Semantic markup
-- Inter Font - Clean, modern typography
-
-## 📁 Project Structure
+## Project Structure
 
 ```
 web-ui/
 ├── backend/
-│   ├── app.py           # Flask API server
-│   ├── database.py      # Database connection handler
-│   └── requirements.txt # Python dependencies
+│   ├── app.py           # The API
+│   ├── database.py      # Database stuff
+│   └── requirements.txt
 └── frontend/
-    ├── index.html       # Main HTML structure
-    ├── styles.css       # Modern CSS styling
-    └── app.js          # JavaScript application logic
+    ├── index.html
+    ├── styles.css
+    └── app.js
 ```
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
-**Backend won't start:**
-- Ensure Flask and Flask-CORS are installed
-- Check that database path is correct
-- Verify Python version is 3.7+
+- If the backend won't start, check if you installed the requirements.
+- If the frontend can't talk to the backend, make sure the backend is running on port 5000.
+- If the database errors out, check if the file exists.
 
-**Frontend can't connect to backend:**
-- Make sure backend server is running on port 5000
-- Check browser console for CORS errors
-- Verify API_BASE_URL in app.js is correct
+## Customization
 
-**Database errors:**
-- Ensure database file exists and is not locked
-- Check that database schema matches expectations
-- Verify you have read/write permissions
-
-## 🎨 Customization
-
-### Change Colors
-Edit CSS variables in `styles.css`:
-```css
-:root {
-    --accent-primary: #3b82f6;    /* Blue */
-    --accent-secondary: #8b5cf6;  /* Purple */
-    --accent-success: #10b981;    /* Green */
-}
-```
-
-### Change API Port
-Edit `app.py`:
-```python
-app.run(debug=True, port=5000)  # Change port here
-```
-
-And update `API_BASE_URL` in `app.js`.
+You can change the colors in `styles.css` if you want.
+To change the port, look at `app.py`.
 
 
 
