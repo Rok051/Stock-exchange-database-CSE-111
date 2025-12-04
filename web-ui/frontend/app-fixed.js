@@ -1017,7 +1017,7 @@ async function showCreateWatchlistModal() {
     const select = document.getElementById('watchlist-user-select');
 
     if (user.role === 'ADMIN') {
-        // Admin can create watchlists for any user
+        // if admin, let them pick which user to create for
         const users = await apiCall('/users');
         select.innerHTML = users.map(u =>
             `<option value="${u.user_id}">${escapeHtml(u.full_name)} (${escapeHtml(u.email)})</option>`
@@ -1025,7 +1025,7 @@ async function showCreateWatchlistModal() {
         select.disabled = false;
         select.parentElement.style.display = 'block';
     } else {
-        // For regular users, pre-select themselves and hide the dropdown
+        // regular user - just create for themselves, hide the dropdown
         select.innerHTML = `<option value="${user.user_id}" selected>${user.full_name}</option>`;
         select.disabled = true;
         select.parentElement.style.display = 'none';
@@ -1038,8 +1038,7 @@ async function createWatchlist(event) {
     event.preventDefault();
     const formData = new FormData(event.target);
 
-    // Backend automatically creates watchlist for authenticated user
-    // Only send the name
+    // backend handles the user_id automatically, just send the name
     const data = {
         name: formData.get('name')
     };

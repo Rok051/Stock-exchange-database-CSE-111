@@ -8,11 +8,161 @@ from auth import hash_password, create_session, get_session, delete_session, req
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type", "Authorization"]}})  # Enable CORS with auth headers
 
+# Order fulfillment stuff - handles when orders get filled
+
+def process_order_fulfillment(order_id):
+    # When an order is marked FILLED, update the holdings and cash balance
+    # Returns True/False and a message
+    
+    # Grab order details from database
+    order_query = '''
+        SELECT o.*, a.cash_balance, a.user_id
+        FROM "Order" o
+        JOIN Account a ON a.account_id = o.account_id
+        WHERE o.order_id = ?
+    '''
+    order = execute_query(order_query, (order_id,), fetch_one=True)
+    
+    if not order:
+        return False, "Order not found"
+    
+    # double check it's not already filled
+    if order['status'] == 'FILLED':
+        return False, "Order is already filled"
+    
+    # need a price to calculate stuff
+    price = order.get('limit_price')
+    if not price or price <= 0:
+        return False, "Order must have a valid limit_price to be filled"
+    
+    # send to buy or sell function depending on order type
+    try:
+        if order['side'].upper() == 'BUY':
+            return _process_buy_order(order, price)
+        elif order['side'].upper() == 'SELL':
+            return _process_sell_order(order, price)
+        else:
+            return False, f"Invalid order side: {order['side']}"
+    except Exception as e:
+        return False, f"Fulfillment failed: {str(e)}"
+
+
+def _process_buy_order(order, price):
+    # Handle buying shares
+    # Check if enough cash, then update holdings and subtract cash
+    total_cost = order['quantity'] * price
+    
+    # make sure they have enough money
+    if order['cash_balance'] < total_cost:
+        return False, f"Insufficient funds. Need ${total_cost:.2f}, have ${order['cash_balance']:.2f}"
+    
+    # check if they already own this stock
+    holding_query = '''
+        SELECT holding_id, quantity, avg_cost
+        FROM Holding
+        WHERE account_id = ? AND security_id = ?
+    '''
+    existing_holding = execute_query(
+        holding_query,
+        (order['account_id'], order['security_id']),
+        fetch_one=True
+    )
+    
+    # calculate new average cost
+    if existing_holding:
+        old_qty = existing_holding['quantity']
+        old_avg = existing_holding['avg_cost']
+        new_qty = old_qty + order['quantity']
+        # weighted average formula
+        new_avg_cost = ((old_qty * old_avg) + (order['quantity'] * price)) / new_qty
+        
+        # update their existing holding
+        update_holding_query = '''
+            UPDATE Holding
+            SET quantity = ?, avg_cost = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE holding_id = ?
+        '''
+        execute_query(update_holding_query, (new_qty, new_avg_cost, existing_holding['holding_id']))
+    else:
+        # make a new holding if they don't have this stock yet
+        holding_id = generate_uuid()
+        create_holding_query = '''
+            INSERT INTO Holding (holding_id, account_id, security_id, quantity, avg_cost)
+            VALUES (?, ?, ?, ?, ?)
+        '''
+        execute_query(create_holding_query, (
+            holding_id,
+            order['account_id'],
+            order['security_id'],
+            order['quantity'],
+            price
+        ))
+    
+    # take money out of their account
+    update_cash_query = '''
+        UPDATE Account
+        SET cash_balance = cash_balance - ?
+        WHERE account_id = ?
+    '''
+    execute_query(update_cash_query, (total_cost, order['account_id']))
+    
+    return True, f"BUY order filled: {order['quantity']} shares at ${price:.2f} (total: ${total_cost:.2f})"
+
+
+def _process_sell_order(order, price):
+    # Handle selling shares
+    # Check if they have enough shares, update holdings, add cash
+    total_proceeds = order['quantity'] * price
+    
+    # Get existing holding
+    holding_query = '''
+        SELECT holding_id, quantity, avg_cost
+        FROM Holding
+        WHERE account_id = ? AND security_id = ?
+    '''
+    holding = execute_query(
+        holding_query,
+        (order['account_id'], order['security_id']),
+        fetch_one=True
+    )
+    
+    if not holding:
+        return False, "No shares to sell - holding does not exist"
+    
+    if holding['quantity'] < order['quantity']:
+        return False, f"Insufficient shares. Need {order['quantity']}, have {holding['quantity']}"
+    
+    # either update quantity or delete holding if they sold everything
+    remaining_shares = holding['quantity'] - order['quantity']
+    
+    if remaining_shares == 0:
+        # sold all shares, delete the holding
+        delete_holding_query = 'DELETE FROM Holding WHERE holding_id = ?'
+        execute_query(delete_holding_query, (holding['holding_id'],))
+    else:
+        # still have some shares left, just update quantity
+        update_holding_query = '''
+            UPDATE Holding
+            SET quantity = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE holding_id = ?
+        '''
+        execute_query(update_holding_query, (remaining_shares, holding['holding_id']))
+    
+    # give them the money from selling
+    update_cash_query = '''
+        UPDATE Account
+        SET cash_balance = cash_balance + ?
+        WHERE account_id = ?
+    '''
+    execute_query(update_cash_query, (total_proceeds, order['account_id']))
+    
+    return True, f"SELL order filled: {order['quantity']} shares at ${price:.2f} (total: ${total_proceeds:.2f})"
+
 # ==================== AUTHENTICATION ====================
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
-    """User login endpoint"""
+    # basically just login stuff
     try:
         data = request.json or {}
         email = data.get('email')
@@ -59,7 +209,7 @@ def login():
 @app.route('/api/auth/logout', methods=['POST'])
 @require_auth
 def logout():
-    """User logout endpoint"""
+    # logout the user
     auth_header = request.headers.get('Authorization', '')
     token = auth_header.replace('Bearer ', '')
     delete_session(token)
@@ -69,7 +219,7 @@ def logout():
 @app.route('/api/auth/me', methods=['GET'])
 @require_auth
 def get_current_user():
-    """Get current authenticated user (from session)"""
+    # like get whoever is logged in right now
     return jsonify({'user': request.current_user}), 200
 
 
@@ -78,7 +228,7 @@ def get_current_user():
 @app.route('/api/users', methods=['GET'])
 @require_admin
 def get_users():
-    """Get all users (admin only)"""
+    # get list of all users - only admins can do this
     users = execute_query('SELECT user_id, full_name, email, role, created_at FROM "User" ORDER BY created_at DESC')
     return jsonify(users)
 
@@ -86,7 +236,7 @@ def get_users():
 @app.route('/api/users/<user_id>', methods=['GET'])
 @require_auth
 def get_user(user_id):
-    """Get a specific user (self or admin)"""
+    # get one user's info
     current = request.current_user
 
     # Non-admins can only see themselves
@@ -196,7 +346,7 @@ def update_user(user_id):
 @app.route('/api/users/<user_id>', methods=['DELETE'])
 @require_admin
 def delete_user(user_id):
-    """Delete a user (admin only)"""
+    # delete a user from the system (admin only)
     execute_query('DELETE FROM "User" WHERE user_id = ?', (user_id,))
     return jsonify({'message': 'User deleted successfully'}), 200
 
@@ -204,7 +354,7 @@ def delete_user(user_id):
 
 @app.route('/api/accounts', methods=['GET'])
 def get_accounts():
-    """Get all accounts with user information"""
+    # get all the bank accounts with owner info
     query = '''
         SELECT a.*, u.full_name, u.email 
         FROM Account a
@@ -216,7 +366,7 @@ def get_accounts():
 
 @app.route('/api/accounts/<account_id>', methods=['GET'])
 def get_account(account_id):
-    """Get a specific account"""
+    # get info for one account
     query = 'SELECT * FROM Account WHERE account_id = ?'
     account = execute_query(query, (account_id,), fetch_one=True)
     if account:
@@ -225,14 +375,14 @@ def get_account(account_id):
 
 @app.route('/api/users/<user_id>/accounts', methods=['GET'])
 def get_user_accounts(user_id):
-    """Get all accounts for a specific user"""
+    # get all accounts that belong to one user
     query = 'SELECT * FROM Account WHERE user_id = ? ORDER BY opened_at DESC'
     accounts = execute_query(query, (user_id,))
     return jsonify(accounts)
 
 @app.route('/api/users/<user_id>/holdings', methods=['GET'])
 def get_user_holdings(user_id):
-    """Get all holdings for a specific user across all accounts"""
+    # like get all stocks a user owns across their accounts
     query = '''
         SELECT h.*, s.ticker, s.name, a.name as account_name,
                (h.quantity * h.avg_cost) as total_cost
@@ -247,7 +397,7 @@ def get_user_holdings(user_id):
 
 @app.route('/api/users/<user_id>/orders', methods=['GET'])
 def get_user_orders(user_id):
-    """Get all orders for a specific user"""
+    # get all orders from one user
     query = '''
         SELECT o.*, s.ticker, s.name, a.name as account_name
         FROM "Order" o
@@ -261,7 +411,7 @@ def get_user_orders(user_id):
 
 @app.route('/api/users/<user_id>/portfolio-summary', methods=['GET'])
 def get_user_portfolio_summary(user_id):
-    """Get portfolio summary for a specific user"""
+    # shows what the user's portfolio looks like - total accounts, holdings value, etc
     query = '''
         SELECT 
             COUNT(DISTINCT a.account_id) as total_accounts,
@@ -279,7 +429,7 @@ def get_user_portfolio_summary(user_id):
 
 @app.route('/api/accounts', methods=['POST'])
 def create_account():
-    """Create a new account"""
+    # makes a new account
     try:
         data = request.json
         account_id = generate_uuid()
@@ -298,7 +448,7 @@ def create_account():
 
 @app.route('/api/accounts/<account_id>/balance', methods=['PUT'])
 def update_balance(account_id):
-    """Update account balance"""
+    # change how much money is in an account
     data = request.json
     amount = data.get('amount', 0)
     query = 'UPDATE Account SET cash_balance = cash_balance + ? WHERE account_id = ?'
@@ -307,7 +457,7 @@ def update_balance(account_id):
 
 @app.route('/api/accounts/<account_id>/status', methods=['PUT'])
 def update_account_status(account_id):
-    """Update account status"""
+    # change account status to like ACTIVE or CLOSED
     data = request.json
     query = 'UPDATE Account SET status = ? WHERE account_id = ?'
     execute_query(query, (data['status'], account_id))
@@ -317,13 +467,13 @@ def update_account_status(account_id):
 
 @app.route('/api/securities', methods=['GET'])
 def get_securities():
-    """Get all securities"""
+    # get all the stocks/securities
     securities = execute_query('SELECT * FROM Security ORDER BY ticker')
     return jsonify(securities)
 
 @app.route('/api/securities/<security_id>', methods=['GET'])
 def get_security(security_id):
-    """Get a specific security"""
+    # get one specific stock
     security = execute_query('SELECT * FROM Security WHERE security_id = ?', 
                             (security_id,), fetch_one=True)
     if security:
@@ -332,7 +482,7 @@ def get_security(security_id):
 
 @app.route('/api/securities/ticker/<ticker>', methods=['GET'])
 def get_security_by_ticker(ticker):
-    """Get security by ticker symbol"""
+    # find a stock by its ticker
     security = execute_query('SELECT * FROM Security WHERE ticker = ?', 
                             (ticker.upper(),), fetch_one=True)
     if security:
@@ -341,7 +491,7 @@ def get_security_by_ticker(ticker):
 
 @app.route('/api/securities', methods=['POST'])
 def create_security():
-    """Create a new security"""
+    # add a new stock to the system
     try:
         data = request.json
         security_id = generate_uuid()
@@ -360,7 +510,7 @@ def create_security():
 
 @app.route('/api/securities/search', methods=['GET'])
 def search_securities():
-    """Search securities by ticker or name"""
+    # search for stocks
     query_param = request.args.get('q', '')
     query = '''
         SELECT * FROM Security 
@@ -375,7 +525,7 @@ def search_securities():
 
 @app.route('/api/prices', methods=['GET'])
 def get_prices():
-    """Get daily prices with optional filters"""
+    # this gets like the daily price data
     ticker = request.args.get('ticker')
     limit = request.args.get('limit', 100)
     
@@ -403,7 +553,7 @@ def get_prices():
 
 @app.route('/api/securities/<security_id>/prices', methods=['GET'])
 def get_security_prices(security_id):
-    """Get price history for a specific security"""
+    # basically price history for one stock
     query = '''
         SELECT * FROM DailyPrice 
         WHERE security_id = ?
@@ -415,7 +565,7 @@ def get_security_prices(security_id):
 
 @app.route('/api/prices', methods=['POST'])
 def create_price():
-    """Add a new daily price"""
+    # add a new price
     data = request.json
     price_id = generate_uuid()
     query = '''
@@ -431,7 +581,7 @@ def create_price():
 
 @app.route('/api/orders', methods=['GET'])
 def get_orders():
-    """Get all orders with account and security info"""
+    # get all the orders
     status = request.args.get('status')
     
     base_query = '''
@@ -452,7 +602,7 @@ def get_orders():
 
 @app.route('/api/orders/<order_id>', methods=['GET'])
 def get_order(order_id):
-    """Get a specific order"""
+    # get details for one order
     query = 'SELECT * FROM "Order" WHERE order_id = ?'
     order = execute_query(query, (order_id,), fetch_one=True)
     if order:
@@ -461,7 +611,7 @@ def get_order(order_id):
 
 @app.route('/api/orders', methods=['POST'])
 def create_order():
-    """Create a new order"""
+    # place a new order
     try:
         data = request.json
         order_id = generate_uuid()
@@ -485,17 +635,48 @@ def create_order():
 
 @app.route('/api/orders/<order_id>/status', methods=['PUT'])
 def update_order_status(order_id):
-    """Update order status"""
-    data = request.json
-    query = 'UPDATE "Order" SET status = ? WHERE order_id = ?'
-    execute_query(query, (data['status'].upper(), order_id))
-    return jsonify({'message': 'Order status updated successfully'})
+    """
+    Update order status.
+    When status is changed to FILLED, automatically processes the order
+    by updating holdings and account balances.
+    """
+    try:
+        data = request.json
+        new_status = data.get('status', '').upper()
+        
+        if not new_status:
+            return jsonify({'error': 'Status is required'}), 400
+        
+        # If status is being set to FILLED, process the order fulfillment
+        if new_status == 'FILLED':
+            success, message = process_order_fulfillment(order_id)
+            
+            if not success:
+                return jsonify({'error': message}), 400
+            
+            # Update the order status to FILLED
+            query = 'UPDATE "Order" SET status = ? WHERE order_id = ?'
+            execute_query(query, ('FILLED', order_id))
+            
+            return jsonify({
+                'message': 'Order filled successfully',
+                'details': message
+            }), 200
+        else:
+            # For non-FILLED statuses, just update the status
+            query = 'UPDATE "Order" SET status = ? WHERE order_id = ?'
+            execute_query(query, (new_status, order_id))
+            return jsonify({'message': f'Order status updated to {new_status}'}), 200
+            
+    except Exception as e:
+        return jsonify({'error': f'Failed to update order status: {str(e)}'}), 500
+
 
 # ==================== HOLDINGS ====================
 
 @app.route('/api/holdings', methods=['GET'])
 def get_holdings():
-    """Get all holdings with security info"""
+    # get what stocks everyone owns with security details
     query = '''
         SELECT h.*, s.ticker, s.name, a.name as account_name,
                (h.quantity * h.avg_cost) as total_cost
@@ -509,7 +690,7 @@ def get_holdings():
 
 @app.route('/api/accounts/<account_id>/holdings', methods=['GET'])
 def get_account_holdings(account_id):
-    """Get holdings for a specific account"""
+    # see what stocks one account has
     query = '''
         SELECT h.*, s.ticker, s.name,
                (h.quantity * h.avg_cost) as total_cost
@@ -523,7 +704,7 @@ def get_account_holdings(account_id):
 
 @app.route('/api/holdings', methods=['POST'])
 def create_holding():
-    """Create or update a holding"""
+    # add a new holding or update existing one
     try:
         data = request.json
         holding_id = generate_uuid()
@@ -550,26 +731,51 @@ def create_holding():
 # ==================== WATCHLISTS ====================
 
 @app.route('/api/watchlists', methods=['GET'])
+@require_auth
 def get_watchlists():
-    """Get all watchlists with item count"""
-    query = '''
-        SELECT w.*, u.full_name, COUNT(wi.security_id) as item_count
-        FROM Watchlist w
-        JOIN User u ON u.user_id = w.user_id
-        LEFT JOIN WatchlistItem wi ON wi.watchlist_id = w.watchlist_id
-        GROUP BY w.watchlist_id
-        ORDER BY w.created_at DESC
-    '''
-    watchlists = execute_query(query)
+    # Show user their own watchlists, or all of them if they're admin
+    current = request.current_user
+    
+    if current['role'] == 'ADMIN':
+        # admins can see everyone's watchlists
+        query = '''
+            SELECT w.*, u.full_name, COUNT(wi.security_id) as item_count
+            FROM Watchlist w
+            JOIN User u ON u.user_id = w.user_id
+            LEFT JOIN WatchlistItem wi ON wi.watchlist_id = w.watchlist_id
+            GROUP BY w.watchlist_id
+            ORDER BY w.created_at DESC
+        '''
+        watchlists = execute_query(query)
+    else:
+        # regular users only see their own stuff
+        query = '''
+            SELECT w.*, u.full_name, COUNT(wi.security_id) as item_count
+            FROM Watchlist w
+            JOIN User u ON u.user_id = w.user_id
+            LEFT JOIN WatchlistItem wi ON wi.watchlist_id = w.watchlist_id
+            WHERE w.user_id = ?
+            GROUP BY w.watchlist_id
+            ORDER BY w.created_at DESC
+        '''
+        watchlists = execute_query(query, (current['user_id'],))
+    
     return jsonify(watchlists)
 
 @app.route('/api/watchlists/<watchlist_id>', methods=['GET'])
+@require_auth
 def get_watchlist(watchlist_id):
-    """Get a specific watchlist with its items"""
+    # Get details for one watchlist
+    current = request.current_user
+    
     watchlist = execute_query('SELECT * FROM Watchlist WHERE watchlist_id = ?', 
                              (watchlist_id,), fetch_one=True)
     if not watchlist:
         return jsonify({'error': 'Watchlist not found'}), 404
+    
+    # make sure they own this watchlist (unless they're admin)
+    if current['role'] != 'ADMIN' and watchlist['user_id'] != current['user_id']:
+        return jsonify({'error': 'Forbidden - you can only access your own watchlists'}), 403
     
     items_query = '''
         SELECT wi.*, s.ticker, s.name, s.sector
@@ -584,41 +790,79 @@ def get_watchlist(watchlist_id):
     return jsonify(watchlist)
 
 @app.route('/api/watchlists', methods=['POST'])
+@require_auth
 def create_watchlist():
-    """Create a new watchlist"""
+    # Create new watchlist for whoever's logged in
     try:
+        current = request.current_user
         data = request.json
         watchlist_id = generate_uuid()
+        
+        # always create for the current user
         query = 'INSERT INTO Watchlist (watchlist_id, user_id, name) VALUES (?, ?, ?)'
-        execute_query(query, (watchlist_id, data['user_id'], data['name']))
+        execute_query(query, (watchlist_id, current['user_id'], data['name']))
         return jsonify({'watchlist_id': watchlist_id, 'message': 'Watchlist created successfully'}), 201
     except Exception as e:
         error_msg = str(e)
-        if 'FOREIGN KEY constraint' in error_msg:
-            return jsonify({'error': 'Invalid user ID - user does not exist'}), 400
-        elif 'NOT NULL constraint' in error_msg:
-            return jsonify({'error': 'Missing required field'}), 400
+        if 'NOT NULL constraint' in error_msg:
+            return jsonify({'error': 'Watchlist name is required'}), 400
         else:
             return jsonify({'error': f'Failed to create watchlist: {error_msg}'}), 500
 
 @app.route('/api/watchlists/<watchlist_id>/items', methods=['POST'])
+@require_auth
 def add_watchlist_item(watchlist_id):
-    """Add a security to a watchlist"""
+    # Add a stock to a watchlist (need to own it first)
+    current = request.current_user
+    
+    # check if they own this watchlist
+    watchlist = execute_query('SELECT user_id FROM Watchlist WHERE watchlist_id = ?', 
+                             (watchlist_id,), fetch_one=True)
+    if not watchlist:
+        return jsonify({'error': 'Watchlist not found'}), 404
+    
+    if current['role'] != 'ADMIN' and watchlist['user_id'] != current['user_id']:
+        return jsonify({'error': 'Forbidden - you can only modify your own watchlists'}), 403
+    
     data = request.json
     query = 'INSERT OR IGNORE INTO WatchlistItem (watchlist_id, security_id) VALUES (?, ?)'
     execute_query(query, (watchlist_id, data['security_id']))
     return jsonify({'message': 'Item added to watchlist'}), 201
 
 @app.route('/api/watchlists/<watchlist_id>/items/<security_id>', methods=['DELETE'])
+@require_auth
 def remove_watchlist_item(watchlist_id, security_id):
-    """Remove a security from a watchlist"""
+    # remove a stock from someone's watchlist (need to own it)
+    current = request.current_user
+    
+    # Verify watchlist ownership
+    watchlist = execute_query('SELECT user_id FROM Watchlist WHERE watchlist_id = ?', 
+                             (watchlist_id,), fetch_one=True)
+    if not watchlist:
+        return jsonify({'error': 'Watchlist not found'}), 404
+    
+    if current['role'] != 'ADMIN' and watchlist['user_id'] != current['user_id']:
+        return jsonify({'error': 'Forbidden - you can only modify your own watchlists'}), 403
+    
     query = 'DELETE FROM WatchlistItem WHERE watchlist_id = ? AND security_id = ?'
     execute_query(query, (watchlist_id, security_id))
     return jsonify({'message': 'Item removed from watchlist'})
 
 @app.route('/api/watchlists/<watchlist_id>', methods=['DELETE'])
+@require_auth
 def delete_watchlist(watchlist_id):
-    """Delete a watchlist"""
+    # delete the whole watchlist (need to own it)
+    current = request.current_user
+    
+    # Verify watchlist ownership
+    watchlist = execute_query('SELECT user_id FROM Watchlist WHERE watchlist_id = ?', 
+                             (watchlist_id,), fetch_one=True)
+    if not watchlist:
+        return jsonify({'error': 'Watchlist not found'}), 404
+    
+    if current['role'] != 'ADMIN' and watchlist['user_id'] != current['user_id']:
+        return jsonify({'error': 'Forbidden - you can only delete your own watchlists'}), 403
+    
     execute_query('DELETE FROM Watchlist WHERE watchlist_id = ?', (watchlist_id,))
     return jsonify({'message': 'Watchlist deleted successfully'})
 
@@ -626,7 +870,7 @@ def delete_watchlist(watchlist_id):
 
 @app.route('/api/analytics/overview', methods=['GET'])
 def get_overview():
-    """Get dashboard overview statistics"""
+    # get the main dashboard stats like total users, accounts, etc
     stats = {}
     
     # Total users
@@ -652,63 +896,140 @@ def get_overview():
     return jsonify(stats)
 
 @app.route('/api/analytics/most-traded', methods=['GET'])
+@require_auth
 def get_most_traded():
-    """Get most traded securities"""
-    query = '''
-        SELECT s.ticker, s.name, COUNT(*) as trade_count
-        FROM "Order" o
-        JOIN Security s ON s.security_id = o.security_id
-        GROUP BY s.security_id
-        ORDER BY trade_count DESC
-        LIMIT 10
-    '''
-    results = execute_query(query)
+    # get which stocks get traded the most (user's own or all if admin)
+    current = request.current_user
+    
+    if current['role'] == 'ADMIN':
+        # Admin sees all trades
+        query = '''
+            SELECT s.ticker, s.name, COUNT(*) as trade_count
+            FROM "Order" o
+            JOIN Security s ON s.security_id = o.security_id
+            GROUP BY s.security_id
+            ORDER BY trade_count DESC
+            LIMIT 10
+        '''
+        results = execute_query(query)
+    else:
+        # Regular users see their own trades only
+        query = '''
+            SELECT s.ticker, s.name, COUNT(*) as trade_count
+            FROM "Order" o
+            JOIN Security s ON s.security_id = o.security_id
+            JOIN Account a ON a.account_id = o.account_id
+            WHERE a.user_id = ?
+            GROUP BY s.security_id
+            ORDER BY trade_count DESC
+            LIMIT 10
+        '''
+        results = execute_query(query, (current['user_id'],))
+    
     return jsonify(results)
 
 @app.route('/api/analytics/top-holdings', methods=['GET'])
+@require_auth
 def get_top_holdings():
-    """Get top holdings by value"""
-    query = '''
-        SELECT s.ticker, s.name, 
-               SUM(h.quantity) as total_shares,
-               SUM(h.quantity * h.avg_cost) as total_value
-        FROM Holding h
-        JOIN Security s ON s.security_id = h.security_id
-        GROUP BY s.security_id
-        ORDER BY total_value DESC
-        LIMIT 10
-    '''
-    results = execute_query(query)
+    # top stocks by total value (user's own or all if admin)
+    current = request.current_user
+    
+    if current['role'] == 'ADMIN':
+        # Admin sees all holdings
+        query = '''
+            SELECT s.ticker, s.name, 
+                   SUM(h.quantity) as total_shares,
+                   SUM(h.quantity * h.avg_cost) as total_value
+            FROM Holding h
+            JOIN Security s ON s.security_id = h.security_id
+            GROUP BY s.security_id
+            ORDER BY total_value DESC
+            LIMIT 10
+        '''
+        results = execute_query(query)
+    else:
+        # Regular users see only their own holdings
+        query = '''
+            SELECT s.ticker, s.name, 
+                   SUM(h.quantity) as total_shares,
+                   SUM(h.quantity * h.avg_cost) as total_value
+            FROM Holding h
+            JOIN Security s ON s.security_id = h.security_id
+            JOIN Account a ON a.account_id = h.account_id
+            WHERE a.user_id = ?
+            GROUP BY s.security_id
+            ORDER BY total_value DESC
+            LIMIT 10
+        '''
+        results = execute_query(query, (current['user_id'],))
+    
     return jsonify(results)
 
 @app.route('/api/analytics/accounts-without-holdings', methods=['GET'])
+@require_auth
 def get_accounts_without_holdings():
-    """Get accounts without any holdings"""
-    query = '''
-        SELECT a.account_id, a.name, a.cash_balance, u.full_name
-        FROM Account a
-        JOIN User u ON u.user_id = a.user_id
-        LEFT JOIN Holding h ON h.account_id = a.account_id
-        WHERE h.account_id IS NULL
-    '''
-    results = execute_query(query)
+    # accounts that don't have any stocks (user's own or all if admin)
+    current = request.current_user
+    
+    if current['role'] == 'ADMIN':
+        # Admin sees all accounts
+        query = '''
+            SELECT a.account_id, a.name, a.cash_balance, u.full_name
+            FROM Account a
+            JOIN User u ON u.user_id = a.user_id
+            LEFT JOIN Holding h ON h.account_id = a.account_id
+            WHERE h.account_id IS NULL
+        '''
+        results = execute_query(query)
+    else:
+        # Regular users see only their own accounts
+        query = '''
+            SELECT a.account_id, a.name, a.cash_balance, u.full_name
+            FROM Account a
+            JOIN User u ON u.user_id = a.user_id
+            LEFT JOIN Holding h ON h.account_id = a.account_id
+            WHERE h.account_id IS NULL AND a.user_id = ?
+        '''
+        results = execute_query(query, (current['user_id'],))
+    
     return jsonify(results)
 
 @app.route('/api/analytics/portfolio-value', methods=['GET'])
+@require_auth
 def get_portfolio_values():
-    """Get total portfolio value per account"""
-    query = '''
-        SELECT a.account_id, a.name, u.full_name,
-               a.cash_balance,
-               COALESCE(SUM(h.quantity * h.avg_cost), 0) as holdings_value,
-               a.cash_balance + COALESCE(SUM(h.quantity * h.avg_cost), 0) as total_value
-        FROM Account a
-        JOIN User u ON u.user_id = a.user_id
-        LEFT JOIN Holding h ON h.account_id = a.account_id
-        GROUP BY a.account_id
-        ORDER BY total_value DESC
-    '''
-    results = execute_query(query)
+    # total value of each account's portfolio (user's own or all if admin)
+    current = request.current_user
+    
+    if current['role'] == 'ADMIN':
+        # Admin sees all accounts
+        query = '''
+            SELECT a.account_id, a.name, u.full_name,
+                   a.cash_balance,
+                   COALESCE(SUM(h.quantity * h.avg_cost), 0) as holdings_value,
+                   a.cash_balance + COALESCE(SUM(h.quantity * h.avg_cost), 0) as total_value
+            FROM Account a
+            JOIN User u ON u.user_id = a.user_id
+            LEFT JOIN Holding h ON h.account_id = a.account_id
+            GROUP BY a.account_id
+            ORDER BY total_value DESC
+        '''
+        results = execute_query(query)
+    else:
+        # Regular users see only their own accounts
+        query = '''
+            SELECT a.account_id, a.name, u.full_name,
+                   a.cash_balance,
+                   COALESCE(SUM(h.quantity * h.avg_cost), 0) as holdings_value,
+                   a.cash_balance + COALESCE(SUM(h.quantity * h.avg_cost), 0) as total_value
+            FROM Account a
+            JOIN User u ON u.user_id = a.user_id
+            LEFT JOIN Holding h ON h.account_id = a.account_id
+            WHERE a.user_id = ?
+            GROUP BY a.account_id
+            ORDER BY total_value DESC
+        '''
+        results = execute_query(query, (current['user_id'],))
+    
     return jsonify(results)
 
 # ==================== ADMIN ====================
@@ -716,7 +1037,7 @@ def get_portfolio_values():
 @app.route('/api/admin/users', methods=['GET'])
 @require_admin
 def admin_get_all_users():
-    """Get all users with their roles (admin only)"""
+    # list all users with their roles (admin only)
     query = '''
         SELECT u.user_id, u.full_name, u.email, u.role, u.created_at,
                COUNT(DISTINCT a.account_id) as account_count
@@ -731,7 +1052,7 @@ def admin_get_all_users():
 @app.route('/api/admin/users/<user_id>/role', methods=['PUT'])
 @require_admin
 def admin_update_user_role(user_id):
-    """Update user role (admin only)"""
+    # change someone's role like USER to ADMIN (admin only)
     try:
         data = request.json
         new_role = data.get('role')
@@ -748,7 +1069,7 @@ def admin_update_user_role(user_id):
 @app.route('/api/admin/stats', methods=['GET'])
 @require_admin
 def admin_get_stats():
-    """Get system statistics (admin only)"""
+    # get system stats (admin only)
     stats = {}
     
     # Total users by role
