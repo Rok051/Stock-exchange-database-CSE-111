@@ -27,7 +27,7 @@
                     <span class="nav-icon">📊</span>
                     <span>Dashboard</span>
                 </a>
-                <a href="#" class="nav-item" data-page="users">
+                <a href="#" class="nav-item admin-only" data-page="users" style="display: none;">
                     <span class="nav-icon">👥</span>
                     <span>Users</span>
                 </a>
@@ -189,7 +189,7 @@
                     </button>
                 </div>
                 <div class="filter-bar">
-                    <select id="order-status-filter" onchange="loadOrders()">
+                    <select id="order-status-filter" onchange="handleOrderStatusFilterChange()">
                         <option value="">All Orders</option>
                         <option value="OPEN">Open</option>
                         <option value="FILLED">Filled</option>
@@ -472,10 +472,7 @@
             <button class="close-btn" onclick="closeModal()">&times;</button>
         </div>
         <form onsubmit="createWatchlist(event)">
-            <div class="form-group">
-                <label>User</label>
-                <select name="user_id" id="watchlist-user-select" required></select>
-            </div>
+
             <div class="form-group">
                 <label>Watchlist Name</label>
                 <input type="text" name="name" required>
@@ -484,7 +481,7 @@
                 <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
                 <button type="submit" class="btn btn-primary">Create Watchlist</button>
             </div>
-    </div>
+        </form>
     </div>
 
     <div class="dashboard-grid">
@@ -682,12 +679,56 @@
         </form>
     </div>
 
+    <!-- Add to Watchlist Modal -->
+    <div id="add-to-watchlist-modal" class="modal">
+        <div class="modal-header">
+            <h3>Add to Watchlist</h3>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <form onsubmit="addToWatchlist(event)">
+            <input type="hidden" name="security_id" id="add-watchlist-security-id">
+            <div class="form-group">
+                <p>Add <strong id="add-watchlist-ticker"></strong> to:</p>
+                <select name="watchlist_id" id="add-watchlist-select" required>
+                    <!-- Populated by JS -->
+                </select>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add</button>
+            </div>
+        </form>
+    </div>
+
     <!-- Notification Toast -->
     <div id="toast" class="toast"></div>
 
+    <!-- Create Watchlist Modal -->
+    <div id="create-watchlist-modal" class="modal">
+        <div class="modal-header">
+            <h3>Create Watchlist</h3>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        <form onsubmit="createWatchlist(event)">
+            <div class="form-group">
+                <label>User</label>
+                <!-- Removed required attribute to prevent validation error when hidden -->
+                <select name="user_id" id="watchlist-user-select"></select>
+            </div>
+            <div class="form-group">
+                <label>Watchlist Name</label>
+                <input type="text" name="name" required>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Watchlist</button>
+            </div>
+        </form>
+    </div>
+
     <!-- Scripts -->
     <script src="auth.js?v=1.1"></script>
-    <script src="app-fixed.js"></script>
+    <script src="app.js?v=6"></script>
 </body>
 
 </html>

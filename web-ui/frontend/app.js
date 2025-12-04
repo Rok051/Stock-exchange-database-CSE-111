@@ -151,7 +151,10 @@ function navigateTo(page) {
             }
             break;
         case 'users':
-            loadUsers();
+            // only admins can view all users
+            if (!isUser) {
+                loadUsers();
+            }
             break;
         case 'accounts':
             if (isUser) {
@@ -659,6 +662,7 @@ function displaySecurities(securities) {
                     <th>Name</th>
                     <th>Sector</th>
                     <th>Exchange</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -668,6 +672,11 @@ function displaySecurities(securities) {
                         <td style="color: var(--text-primary); font-weight: 600;">${escapeHtml(security.name)}</td>
                         <td>${escapeHtml(security.sector || 'N/A')}</td>
                         <td>${escapeHtml(security.exchange)}</td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" onclick="openAddToWatchlistModal('${security.security_id}', '${escapeHtml(security.ticker)}')">
+                                + Watchlist
+                            </button>
+                        </td>
                     </tr>
                 `).join('')}
             </tbody>
@@ -821,6 +830,19 @@ function toggleLimitPrice() {
     limitPriceGroup.style.display = orderType === 'LIMIT' ? 'block' : 'none';
 }
 
+// Handle order status filter change based on user role
+function handleOrderStatusFilterChange() {
+    const user = window.currentUser;
+    if (!user) return;
+
+    const isUser = user.role !== 'ADMIN';
+    if (isUser) {
+        loadUserOrders(user.user_id);
+    } else {
+        loadOrders();
+    }
+}
+
 async function createOrder(event) {
     event.preventDefault();
     const formData = new FormData(event.target);
@@ -861,7 +883,7 @@ async function updateOrderStatus(orderId, status) {
             loadUserOrders(window.currentUser.user_id);
         }
     } catch (error) {
-        showToast('Failed to update order status', 'error');
+        showToast(error.message || 'Failed to update order status', 'error');
     }
 }
 
@@ -1013,24 +1035,8 @@ function displayWatchlists(watchlists) {
 }
 
 async function showCreateWatchlistModal() {
-    const user = window.currentUser;
-    const select = document.getElementById('watchlist-user-select');
-
-    if (user.role === 'ADMIN') {
-        // Admin can create watchlists for any user
-        const users = await apiCall('/users');
-        select.innerHTML = users.map(u =>
-            `<option value="${u.user_id}">${escapeHtml(u.full_name)} (${escapeHtml(u.email)})</option>`
-        ).join('');
-        select.disabled = false;
-        select.parentElement.style.display = 'block';
-    } else {
-        // For regular users, pre-select themselves and hide the dropdown
-        select.innerHTML = `<option value="${user.user_id}" selected>${user.full_name}</option>`;
-        select.disabled = true;
-        select.parentElement.style.display = 'none';
-    }
-
+    // Watchlists are always created for the current logged-in user.
+    // We don't need to pick a user in the UI anymore.
     showModal('create-watchlist-modal');
 }
 
@@ -1038,8 +1044,7 @@ async function createWatchlist(event) {
     event.preventDefault();
     const formData = new FormData(event.target);
 
-    // Backend automatically creates watchlist for authenticated user
-    // Only send the name
+    // backend handles the user_id automatically, just send the name
     const data = {
         name: formData.get('name')
     };
@@ -1203,4 +1208,54 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+// ==================== WATCHLIST HELPERS ====================
+
+async function openAddToWatchlistModal(securityId, ticker) {
+    document.getElementById('add-watchlist-security-id').value = securityId;
+    document.getElementById('add-watchlist-ticker').textContent = ticker;
+
+    // Load watchlists for dropdown
+    const select = document.getElementById('add-watchlist-select');
+    select.innerHTML = '<option>Loading...</option>';
+
+    try {
+        const watchlists = await apiCall('/watchlists');
+        if (watchlists.length === 0) {
+            select.innerHTML = '<option value="" disabled selected>No watchlists found - Create one first!</option>';
+        } else {
+            select.innerHTML = watchlists.map(w =>
+                `<option value="${w.watchlist_id}">${escapeHtml(w.name)}</option>`
+            ).join('');
+        }
+    } catch (error) {
+        select.innerHTML = '<option value="" disabled>Error loading watchlists</option>';
+    }
+
+    showModal('add-to-watchlist-modal');
+}
+
+async function addToWatchlist(event) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
+    const watchlistId = formData.get('watchlist_id');
+    const securityId = formData.get('security_id');
+
+    if (!watchlistId) {
+        showToast('Please select a watchlist', 'error');
+        return;
+    }
+
+    try {
+        await apiCall(`/watchlists/${watchlistId}/items`, 'POST', { security_id: securityId });
+        showToast('Added to watchlist successfully!', 'success');
+        closeModal();
+        // Optional: reload watchlists if currently on that page
+        if (currentPage === 'watchlists') {
+            loadWatchlists();
+        }
+    } catch (error) {
+        showToast(error.message || 'Failed to add to watchlist', 'error');
+    }
 }

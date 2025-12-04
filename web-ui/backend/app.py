@@ -31,11 +31,32 @@ def process_order_fulfillment(order_id):
         return False, "Order is already filled"
     
     # need a price to calculate stuff
-    price = order.get('limit_price')
+    price = None
+    order_type = (order.get('type') or '').upper()
+
+    if order_type == 'LIMIT':
+        # use the stored limit price
+        price = order.get('limit_price')
+    elif order_type == 'MARKET':
+        # use the most recent close price from DailyPrice
+        price_row = execute_query(
+            '''
+            SELECT close
+            FROM DailyPrice
+            WHERE security_id = ?
+            ORDER BY price_date DESC
+            LIMIT 1
+            ''',
+            (order['security_id'],),
+            fetch_one=True
+        )
+        if price_row:
+            price = price_row['close']
+
     if not price or price <= 0:
-        return False, "Order must have a valid limit_price to be filled"
-    
-    # send to buy or sell function depending on order type
+        return False, "Order must have a valid price to be filled"
+
+    # send to buy or sell function depending on order side
     try:
         if order['side'].upper() == 'BUY':
             return _process_buy_order(order, price)
