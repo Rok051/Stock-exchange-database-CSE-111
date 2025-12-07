@@ -531,7 +531,6 @@ function displayAccounts(accounts) {
         return;
     }
 
-    // Check if we are in admin mode
     const isAdmin = window.currentUser && window.currentUser.role === 'ADMIN';
 
     container.innerHTML = `
@@ -543,27 +542,41 @@ function displayAccounts(accounts) {
                     <th>Cash Balance</th>
                     <th>Status</th>
                     <th>Opened</th>
-                    <th>Actions</th>
+                    ${isAdmin ? '<th>Actions</th>' : ''}
                 </tr>
             </thead>
             <tbody>
                 ${accounts.map(account => `
                     <tr>
-                        <td style="color: var(--text-primary); font-weight: 600;">${escapeHtml(account.name)}</td>
-                        <td>${escapeHtml(account.full_name || 'Me')}</td>
-                        <td style="color: var(--accent-success); font-weight: 600;">$${formatNumber(account.cash_balance)}</td>
-                        <td><span class="badge badge-${account.status.toLowerCase()}">${account.status}</span></td>
-                        <td>${formatDate(account.opened_at)}</td>
-                        <td>
-                            <button class="btn btn-sm btn-primary" onclick="showDepositModal('${account.account_id}')">Deposit</button>
+                        <td style="color: var(--text-primary); font-weight: 600;">
+                            ${escapeHtml(account.name)}
                         </td>
+                        <td>${escapeHtml(account.full_name || 'Me')}</td>
+                        <td style="color: var(--accent-success); font-weight: 600;">
+                            $${formatNumber(account.cash_balance)}
+                        </td>
+                        <td>
+                            <span class="badge badge-${account.status.toLowerCase()}">
+                                ${account.status}
+                            </span>
+                        </td>
+                        <td>${formatDate(account.opened_at)}</td>
+                        ${isAdmin
+            ? `<td>
+                                       <button class="btn btn-sm btn-primary"
+                                               onclick="showDepositModal('${account.account_id}')">
+                                           Deposit
+                                       </button>
+                                   </td>`
+            : ''
+        }
                     </tr>
                 `).join('')}
             </tbody>
         </table>
     `;
 
-    // If not admin, hide the Owner column
+    // If not admin, hide the "Owner" column (same as before)
     if (!isAdmin) {
         const table = container.querySelector('table');
         if (table) {
@@ -627,15 +640,22 @@ async function createAccount(event) {
 }
 
 function showDepositModal(accountId) {
-    const amount = prompt('Enter deposit amount:');
-    if (amount && !isNaN(amount)) {
-        updateBalance(accountId, parseFloat(amount));
+    const raw = prompt('Enter deposit amount:');
+    if (raw === null) return; // user clicked cancel
+
+    const amount = parseFloat(raw);
+    if (isNaN(amount) || amount <= 0) {
+        showToast('Please enter a valid positive amount', 'error');
+        return;
     }
+
+    updateBalance(accountId, amount);
 }
 
 async function updateBalance(accountId, amount) {
     try {
         await apiCall(`/accounts/${accountId}/balance`, 'PUT', { amount });
+
         showToast('Balance updated successfully!', 'success');
 
         // Reload correct list

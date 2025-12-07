@@ -468,12 +468,47 @@ def create_account():
             return jsonify({'error': f'Failed to create account: {error_msg}'}), 500
 
 @app.route('/api/accounts/<account_id>/balance', methods=['PUT'])
+@require_auth
 def update_balance(account_id):
-    # change how much money is in an account
-    data = request.json
-    amount = data.get('amount', 0)
-    query = 'UPDATE Account SET cash_balance = cash_balance + ? WHERE account_id = ?'
-    execute_query(query, (amount, account_id))
+    """
+    Admin-only: adjust account cash_balance.
+    - Only ADMIN can call this
+    - ADMIN can deposit into any account
+    """
+    current = request.current_user
+    if current['role'] != 'ADMIN':
+        return jsonify({'error': 'Only admins can modify account balances'}), 403
+
+    data = request.get_json() or {}
+    amount = data.get('amount')
+
+    try:
+        amount = float(amount)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid amount'}), 400
+
+    if amount <= 0:
+        return jsonify({'error': 'Amount must be positive'}), 400
+
+    # Make sure account exists
+    account = execute_query(
+        '''
+        SELECT account_id
+        FROM Account
+        WHERE account_id = ?
+        ''',
+        (account_id,),
+        fetch_one=True
+    )
+    if not account:
+        return jsonify({'error': 'Account not found'}), 404
+
+    # Apply deposit
+    execute_query(
+        'UPDATE Account SET cash_balance = cash_balance + ? WHERE account_id = ?',
+        (amount, account_id)
+    )
+
     return jsonify({'message': 'Balance updated successfully'})
 
 @app.route('/api/accounts/<account_id>/status', methods=['PUT'])
