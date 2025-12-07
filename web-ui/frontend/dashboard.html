@@ -37,7 +37,7 @@
                 </a>
                 <a href="#" class="nav-item" data-page="securities">
                     <span class="nav-icon">💹</span>
-                    <span>Securities</span>
+                    <span>Stocks</span>
                 </a>
                 <a href="#" class="nav-item" data-page="orders">
                     <span class="nav-icon">📝</span>
@@ -101,7 +101,7 @@
                         <div class="stat-icon">💹</div>
                         <div class="stat-info">
                             <h3 id="stat-securities">0</h3>
-                            <p>Securities</p>
+                            <p>Stocks</p>
                         </div>
                     </div>
                     <div class="stat-card">
@@ -119,7 +119,7 @@
                         <div id="recent-orders" class="recent-list"></div>
                     </div>
                     <div class="card">
-                        <h3>Most Traded Securities</h3>
+                        <h3>Most Traded Stocks</h3>
                         <div id="most-traded" class="recent-list"></div>
                     </div>
                 </div>
@@ -161,11 +161,11 @@
             <div id="securities-page" class="page">
                 <div class="page-header">
                     <div>
-                        <h2>Securities</h2>
-                        <p class="page-subtitle">Browse and manage securities</p>
+                        <h2>Stocks</h2>
+                        <p class="page-subtitle">Browse and manage stocks</p>
                     </div>
                     <button class="btn btn-primary" onclick="showCreateSecurityModal()">
-                        + Add Security
+                        + Add Stock
                     </button>
                 </div>
                 <div class="search-bar">
@@ -360,7 +360,7 @@
     <!-- Create Security Modal -->
     <div id="create-security-modal" class="modal">
         <div class="modal-header">
-            <h3>Add New Security</h3>
+            <h3>Add New Stock</h3>
             <button class="close-btn" onclick="closeModal()">&times;</button>
         </div>
         <form onsubmit="createSecurity(event)">
@@ -386,7 +386,7 @@
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Add Security</button>
+                <button type="submit" class="btn btn-primary">Add Stock</button>
             </div>
         </form>
     </div>
@@ -403,7 +403,7 @@
                 <select name="account_id" id="order-account-select" required></select>
             </div>
             <div class="form-group">
-                <label>Security</label>
+                <label>Stock</label>
                 <select name="security_id" id="order-security-select" required></select>
             </div>
             <div class="form-group">
@@ -447,7 +447,7 @@
                 <select name="account_id" id="holding-account-select" required></select>
             </div>
             <div class="form-group">
-                <label>Security</label>
+                <label>Stock</label>
                 <select name="security_id" id="holding-security-select" required></select>
             </div>
             <div class="form-group">
@@ -717,8 +717,8 @@
         </div>
     </div>
 
-    <script src="app.js?v=8"></script>
-    <script src="auth.js?v=8"></script>
+    <script src="app.js?v=10"></script>
+    <script src="auth.js?v=10"></script>
 </body>
 
 </html>

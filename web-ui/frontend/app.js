@@ -683,7 +683,7 @@ async function loadSecurities() {
 function displaySecurities(securities) {
     const container = document.getElementById('securities-table');
     if (!securities || securities.length === 0) {
-        container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No securities found</p>';
+        container.innerHTML = '<p style="color: var(--text-secondary); padding: 2rem; text-align: center;">No stocks found</p>';
         return;
     }
 
@@ -748,11 +748,11 @@ async function createSecurity(event) {
 
     try {
         await apiCall('/securities', 'POST', data);
-        showToast('Security added successfully!', 'success');
+        showToast('Stock added successfully!', 'success');
         closeModal();
         loadSecurities();
     } catch (error) {
-        showToast('Failed to add security', 'error');
+        showToast('Failed to add stock', 'error');
     }
 }
 
@@ -1106,6 +1106,12 @@ async function viewWatchlistDetails(watchlistId, name) {
 
         modalTitle.textContent = `Details: ${name}`;
 
+        // Check if current user is owner or admin
+        const currentUserId = window.currentUser.user_id;
+        const isOwner = watchlist.user_id === currentUserId;
+        const isAdmin = window.currentUser.role === 'ADMIN';
+        const canEdit = isOwner || isAdmin;
+
         if (!watchlist.items || watchlist.items.length === 0) {
             modalContent.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No items in this watchlist</p>';
         } else {
@@ -1117,6 +1123,7 @@ async function viewWatchlistDetails(watchlistId, name) {
                             <th>Name</th>
                             <th>Sector</th>
                             <th>Added</th>
+                            ${canEdit ? '<th>Actions</th>' : ''}
                         </tr>
                     </thead>
                     <tbody>
@@ -1126,6 +1133,14 @@ async function viewWatchlistDetails(watchlistId, name) {
                                 <td>${escapeHtml(item.name)}</td>
                                 <td>${escapeHtml(item.sector || '-')}</td>
                                 <td>${new Date(item.added_at).toLocaleDateString()}</td>
+                                ${canEdit ? `
+                                    <td>
+                                        <button class="btn btn-sm btn-danger" 
+                                                onclick="removeWatchlistItem('${watchlistId}', '${item.security_id}', '${escapeHtml(name)}')">
+                                            Remove
+                                        </button>
+                                    </td>
+                                ` : ''}
                             </tr>
                         `).join('')}
                     </tbody>
@@ -1137,6 +1152,20 @@ async function viewWatchlistDetails(watchlistId, name) {
     } catch (error) {
         console.error(error);
         showToast('Failed to load watchlist details', 'error');
+    }
+}
+
+async function removeWatchlistItem(watchlistId, securityId, watchlistName) {
+    if (!confirm('Are you sure you want to remove this stock from the watchlist?')) return;
+
+    try {
+        await apiCall(`/watchlists/${watchlistId}/items/${securityId}`, 'DELETE');
+        showToast('Item removed successfully', 'success');
+        // Refresh the modal content
+        viewWatchlistDetails(watchlistId, watchlistName);
+    } catch (error) {
+        console.error(error);
+        showToast('Failed to remove item', 'error');
     }
 }
 
