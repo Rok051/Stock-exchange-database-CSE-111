@@ -703,32 +703,22 @@
     <!-- Notification Toast -->
     <div id="toast" class="toast"></div>
 
-    <!-- Create Watchlist Modal -->
-    <div id="create-watchlist-modal" class="modal">
+    <!-- View Watchlist Details Modal -->
+    <div id="view-watchlist-modal" class="modal">
         <div class="modal-header">
-            <h3>Create Watchlist</h3>
+            <h3 id="view-watchlist-title">Watchlist Details</h3>
             <button class="close-btn" onclick="closeModal()">&times;</button>
         </div>
-        <form onsubmit="createWatchlist(event)">
-            <div class="form-group">
-                <label>User</label>
-                <!-- Removed required attribute to prevent validation error when hidden -->
-                <select name="user_id" id="watchlist-user-select"></select>
-            </div>
-            <div class="form-group">
-                <label>Watchlist Name</label>
-                <input type="text" name="name" required>
-            </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create Watchlist</button>
-            </div>
-        </form>
+        <div class="modal-body" id="view-watchlist-content">
+            <!-- Items will be populated here -->
+        </div>
+        <div class="modal-actions">
+            <button type="button" class="btn btn-secondary" onclick="closeModal()">Close</button>
+        </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="auth.js?v=1.1"></script>
     <script src="app.js?v=6"></script>
+    <script src="auth.js?v=6"></script>
 </body>
 
 </html>

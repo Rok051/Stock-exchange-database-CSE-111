@@ -195,7 +195,9 @@ function navigateTo(page) {
 }
 
 // ==================== API CALLS ====================
+// ==================== API CALLS ====================
 async function apiCall(endpoint, method = 'GET', data = null) {
+    console.log(`[API] ${method} ${endpoint}`, data); // Debug log
     try {
         const token = getToken();
 
@@ -216,21 +218,32 @@ async function apiCall(endpoint, method = 'GET', data = null) {
 
         const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
 
-        let result;
+        // Handle 204 No Content or empty responses
+        if (response.status === 204) {
+            return {};
+        }
+
+        const text = await response.text();
+        let result = {};
         try {
-            result = await response.json();
+            if (text) {
+                result = JSON.parse(text);
+            }
         } catch (e) {
+            console.error('[API] Failed to parse JSON response:', text);
             throw new Error(`Server returned invalid JSON: ${response.statusText}`);
         }
 
         if (!response.ok) {
+            console.error('[API] Request failed:', response.status, result);
             const errorMsg = result.error || result.message || `API request failed with status ${response.status}`;
             throw new Error(errorMsg);
         }
 
+        console.log(`[API] Success:`, result);
         return result;
     } catch (error) {
-        console.error('API Error:', error);
+        console.error('[API] Error:', error);
         showToast(error.message, 'error');
         throw error;
     }
@@ -1012,9 +1025,14 @@ function displayWatchlists(watchlists) {
         return;
     }
 
+    const currentUserId = window.currentUser.user_id; // Fix: Ensure we compare with stored user ID
+    const isAdmin = window.currentUser.role === 'ADMIN';
+
     container.innerHTML = `
         <div class="watchlists-grid">
-            ${watchlists.map(watchlist => `
+            ${watchlists.map(watchlist => {
+        const canDelete = isAdmin || watchlist.user_id === currentUserId;
+        return `
                 <div class="watchlist-card">
                     <div class="watchlist-header">
                         <div>
@@ -1023,13 +1041,14 @@ function displayWatchlists(watchlists) {
                                 ${escapeHtml(watchlist.full_name)} • ${watchlist.item_count} items
                             </p>
                         </div>
-                        <button class="btn btn-sm btn-danger" onclick="deleteWatchlist('${watchlist.watchlist_id}')">Delete</button>
+                        ${canDelete ? `<button class="btn btn-sm btn-danger" onclick="deleteWatchlist('${watchlist.watchlist_id}')">Delete</button>` : ''}
                     </div>
                     <button class="btn btn-sm btn-primary" onclick="viewWatchlistDetails('${watchlist.watchlist_id}', '${escapeHtml(watchlist.name)}')">
                         View Details
                     </button>
                 </div>
-            `).join('')}
+            `;
+    }).join('')}
         </div>
     `;
 }
@@ -1062,8 +1081,41 @@ async function createWatchlist(event) {
 async function viewWatchlistDetails(watchlistId, name) {
     try {
         const watchlist = await apiCall(`/watchlists/${watchlistId}`);
-        alert(`Watchlist: ${name}\n\nItems:\n${watchlist.items.map(item => `• ${item.ticker} - ${item.name}`).join('\n') || 'No items'}`);
+        const modalTitle = document.getElementById('view-watchlist-title');
+        const modalContent = document.getElementById('view-watchlist-content');
+
+        modalTitle.textContent = `Details: ${name}`;
+
+        if (!watchlist.items || watchlist.items.length === 0) {
+            modalContent.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No items in this watchlist</p>';
+        } else {
+            modalContent.innerHTML = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Ticker</th>
+                            <th>Name</th>
+                            <th>Sector</th>
+                            <th>Added</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${watchlist.items.map(item => `
+                            <tr>
+                                <td style="font-weight: 600; color: var(--accent-primary);">${escapeHtml(item.ticker)}</td>
+                                <td>${escapeHtml(item.name)}</td>
+                                <td>${escapeHtml(item.sector || '-')}</td>
+                                <td>${new Date(item.added_at).toLocaleDateString()}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        showModal('view-watchlist-modal');
     } catch (error) {
+        console.error(error);
         showToast('Failed to load watchlist details', 'error');
     }
 }
@@ -1076,6 +1128,7 @@ async function deleteWatchlist(watchlistId) {
         showToast('Watchlist deleted successfully!', 'success');
         loadWatchlists();
     } catch (error) {
+        console.error('Delete failed:', error);
         showToast('Failed to delete watchlist', 'error');
     }
 }

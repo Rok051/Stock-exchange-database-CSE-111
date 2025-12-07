@@ -884,6 +884,10 @@ def delete_watchlist(watchlist_id):
     if current['role'] != 'ADMIN' and watchlist['user_id'] != current['user_id']:
         return jsonify({'error': 'Forbidden - you can only delete your own watchlists'}), 403
     
+    # 1) Delete all items in this watchlist (avoids FK issues)
+    execute_query('DELETE FROM WatchlistItem WHERE watchlist_id = ?', (watchlist_id,))
+
+    # 2) Delete the watchlist itself
     execute_query('DELETE FROM Watchlist WHERE watchlist_id = ?', (watchlist_id,))
     return jsonify({'message': 'Watchlist deleted successfully'})
 
