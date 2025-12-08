@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sign In - StockEx</title>
+    <title>Sign Up - StockEx</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         * {
@@ -24,7 +24,6 @@
             overflow: hidden;
         }
 
-        /* Animated background */
         body::before {
             content: '';
             position: absolute;
@@ -145,7 +144,7 @@
             background: rgba(15, 23, 42, 0.8);
         }
 
-        .btn-signin {
+        .btn-signup {
             width: 100%;
             padding: 0.875rem;
             background: linear-gradient(135deg, #3b82f6, #8b5cf6);
@@ -160,12 +159,12 @@
             margin-top: 0.5rem;
         }
 
-        .btn-signin:hover {
+        .btn-signup:hover {
             box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
             transform: translateY(-2px);
         }
 
-        .btn-signin:active {
+        .btn-signup:active {
             transform: translateY(0);
         }
 
@@ -178,52 +177,27 @@
             margin-bottom: 1.5rem;
             font-size: 0.875rem;
             display: none;
-            animation: shake 0.5s ease;
-        }
-
-        @keyframes shake {
-
-            0%,
-            100% {
-                transform: translateX(0);
-            }
-
-            25% {
-                transform: translateX(-10px);
-            }
-
-            75% {
-                transform: translateX(10px);
-            }
         }
 
         .error-message.show {
             display: block;
         }
 
-        .demo-credentials {
-            background: rgba(59, 130, 246, 0.1);
-            border: 1px solid rgba(59, 130, 246, 0.3);
-            border-radius: 0.75rem;
-            padding: 1rem;
+        .auth-switch {
             margin-top: 1.5rem;
-        }
-
-        .demo-credentials h3 {
-            color: #3b82f6;
+            text-align: center;
             font-size: 0.875rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-
-        .demo-credentials p {
             color: #94a3b8;
-            font-size: 0.8125rem;
-            margin: 0.25rem 0;
         }
 
-        .demo-credentials strong {
-            color: #f8fafc;
+        .auth-switch a {
+            color: #3b82f6;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-switch a:hover {
+            text-decoration: underline;
         }
 
         .loading {
@@ -250,12 +224,17 @@
             <div class="logo">
                 <div class="logo-icon">📈</div>
                 <h1>StockEx</h1>
-                <p>Stock Exchange Management System</p>
+                <p>Create a new trading account</p>
             </div>
 
             <div id="error-message" class="error-message"></div>
 
-            <form id="login-form">
+            <form id="signup-form">
+                <div class="form-group">
+                    <label for="full_name">Full Name</label>
+                    <input type="text" id="full_name" name="full_name" required placeholder="Your name">
+                </div>
+
                 <div class="form-group">
                     <label for="email">Email Address</label>
                     <input type="email" id="email" name="email" required placeholder="Enter your email">
@@ -263,24 +242,17 @@
 
                 <div class="form-group">
                     <label for="password">Password</label>
-                    <input type="password" id="password" name="password" required placeholder="Enter your password">
+                    <input type="password" id="password" name="password" required placeholder="Create a password">
                 </div>
 
-                <button type="submit" class="btn-signin" id="signin-btn">
-                    <span id="btn-text">Sign In</span>
+                <button type="submit" class="btn-signup" id="signup-btn">
+                    <span id="btn-text">Sign Up</span>
                 </button>
             </form>
 
-            <div class="demo-credentials">
-                <h3>🔑 Demo Credentials</h3>
-                <p><strong>Admin:</strong> admin@stockex.com / admin123</p>
-                <p><strong>User:</strong> demo@stockex.com / demo123</p>
-            </div>
-
-            <div class="auth-switch"
-                style="margin-top: 1.5rem; text-align: center; font-size: 0.875rem; color: #94a3b8;">
-                Don't have an account?
-                <a href="/signup.html" style="color:#3b82f6; text-decoration:none; font-weight:500;">Sign up</a>
+            <div class="auth-switch">
+                Already have an account?
+                <a href="/index.html">Sign in</a>
             </div>
         </div>
     </div>
@@ -288,54 +260,49 @@
     <script>
         const API_BASE_URL = 'http://localhost:5001/api';
 
-        document.getElementById('login-form').addEventListener('submit', async (e) => {
+        document.getElementById('signup-form').addEventListener('submit', async (e) => {
             e.preventDefault();
 
+            const full_name = document.getElementById('full_name').value;
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
+
             const errorDiv = document.getElementById('error-message');
             const btnText = document.getElementById('btn-text');
-            const signinBtn = document.getElementById('signin-btn');
+            const signupBtn = document.getElementById('signup-btn');
 
-            // Show loading state
-            signinBtn.disabled = true;
+            signupBtn.disabled = true;
             btnText.innerHTML = '<span class="loading"></span>';
             errorDiv.classList.remove('show');
 
             try {
-                const response = await fetch(`${API_BASE_URL}/auth/login`, {
+                const response = await fetch(`${API_BASE_URL}/auth/register`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ email, password })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ full_name, email, password })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    // Store session
+                    // save session and go straight to dashboard
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
-
-                    // Redirect to main app
                     window.location.href = '/dashboard.html';
                 } else {
-                    // Show error
-                    errorDiv.textContent = data.error || 'Login failed';
+                    errorDiv.textContent = data.error || 'Sign up failed';
                     errorDiv.classList.add('show');
                 }
-            } catch (error) {
+            } catch (err) {
                 errorDiv.textContent = 'Unable to connect to server. Is the backend running on port 5001?';
                 errorDiv.classList.add('show');
             } finally {
-                // Reset button
-                signinBtn.disabled = false;
-                btnText.textContent = 'Sign In';
+                signupBtn.disabled = false;
+                btnText.textContent = 'Sign Up';
             }
         });
 
-        // Check if already logged in
+        // If already logged in, bounce to dashboard
         if (localStorage.getItem('token')) {
             window.location.href = '/dashboard.html';
         }

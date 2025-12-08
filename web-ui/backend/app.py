@@ -227,6 +227,59 @@ def login():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/auth/register', methods=['POST'])
+def register():
+    """
+    Public signup endpoint - allows anyone to create a USER account
+    """
+    data = request.get_json() or {}
+
+    full_name = (data.get('full_name') or '').strip()
+    email = (data.get('email') or '').strip().lower()
+    password = data.get('password') or ''
+
+    # basic validation
+    if not full_name or not email or not password:
+        return jsonify({'error': 'Full name, email, and password are required'}), 400
+
+    # check if email already exists
+    existing = execute_query(
+        'SELECT user_id FROM "User" WHERE email = ?',
+        (email,),
+        fetch_one=True
+    )
+    if existing:
+        return jsonify({'error': 'An account with this email already exists'}), 400
+
+    # create user
+    user_id = generate_uuid()
+    password_hash = hash_password(password)
+    role = 'USER'  # signup always creates a regular user
+
+    try:
+        execute_query(
+            '''
+            INSERT INTO "User" (user_id, full_name, email, password, role)
+            VALUES (?, ?, ?, ?, ?)
+            ''',
+            (user_id, full_name, email, password_hash, role)
+        )
+    except Exception as e:
+        return jsonify({'error': f'Failed to create account: {str(e)}'}), 500
+
+    # auto-login after signup: create session + send back token + user
+    token = create_session(user_id, email, full_name, role)
+
+    user = {
+        'user_id': user_id,
+        'full_name': full_name,
+        'email': email,
+        'role': role
+    }
+
+    return jsonify({'token': token, 'user': user}), 201
+
+
 @app.route('/api/auth/logout', methods=['POST'])
 @require_auth
 def logout():
@@ -368,6 +421,12 @@ def update_user(user_id):
 @require_admin
 def delete_user(user_id):
     # delete a user from the system (admin only)
+    current = request.current_user
+    
+    # Prevent deleting yourself
+    if current['user_id'] == user_id:
+        return jsonify({'error': 'You cannot delete your own account'}), 400
+    
     execute_query('DELETE FROM "User" WHERE user_id = ?', (user_id,))
     return jsonify({'message': 'User deleted successfully'}), 200
 
@@ -471,17 +530,16 @@ def create_account():
 @require_auth
 def update_balance(account_id):
     """
-    Admin-only: adjust account cash_balance.
-    - Only ADMIN can call this
-    - ADMIN can deposit into any account
+    Update the cash_balance of an account.
+
+    - Admin: can update any account
+    - Regular user: can only update their own accounts
     """
     current = request.current_user
-    if current['role'] != 'ADMIN':
-        return jsonify({'error': 'Only admins can modify account balances'}), 403
-
     data = request.get_json() or {}
     amount = data.get('amount')
 
+    # Basic validation
     try:
         amount = float(amount)
     except (TypeError, ValueError):
@@ -490,26 +548,27 @@ def update_balance(account_id):
     if amount <= 0:
         return jsonify({'error': 'Amount must be positive'}), 400
 
-    # Make sure account exists
+    # Check ownership
     account = execute_query(
-        '''
-        SELECT account_id
-        FROM Account
-        WHERE account_id = ?
-        ''',
+        'SELECT user_id FROM Account WHERE account_id = ?',
         (account_id,),
         fetch_one=True
     )
     if not account:
         return jsonify({'error': 'Account not found'}), 404
 
-    # Apply deposit
+    # If not admin, must own the account
+    if current['role'] != 'ADMIN' and account['user_id'] != current['user_id']:
+        return jsonify({'error': 'Forbidden - you can only deposit to your own accounts'}), 403
+
+    # Perform update
     execute_query(
         'UPDATE Account SET cash_balance = cash_balance + ? WHERE account_id = ?',
         (amount, account_id)
     )
 
     return jsonify({'message': 'Balance updated successfully'})
+
 
 @app.route('/api/accounts/<account_id>/status', methods=['PUT'])
 def update_account_status(account_id):
@@ -1120,7 +1179,12 @@ def admin_update_user_role(user_id):
         if new_role not in ['USER', 'ADMIN']:
             return jsonify({'error': 'Role must be USER or ADMIN'}), 400
         
-        query = 'UPDATE User SET role = ? WHERE user_id = ?'
+        # Prevent admin from demoting themselves
+        current = request.current_user
+        if current['user_id'] == user_id and new_role != 'ADMIN':
+            return jsonify({'error': 'You cannot change your own role'}), 400
+        
+        query = 'UPDATE "User" SET role = ? WHERE user_id = ?'
         execute_query(query, (new_role, user_id))
         return jsonify({'message': 'User role updated successfully'}), 200
     except Exception as e:
