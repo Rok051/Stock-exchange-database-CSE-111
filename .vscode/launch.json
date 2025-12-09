@@ -1,0 +1,44 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Start Backend (Flask)",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/web-ui/backend/app.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/web-ui/backend",
+            "justMyCode": false
+        },
+        {
+            "name": "Start Frontend (HTTP Server)",
+            "type": "python",
+            "request": "launch",
+            "module": "http.server",
+            "args": [
+                "8000",
+                "--bind",
+                "127.0.0.1"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/web-ui/frontend"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Run Full Stack App",
+            "configurations": [
+                "Start Backend (Flask)",
+                "Start Frontend (HTTP Server)"
+            ]
+        }
+    ]
+}
